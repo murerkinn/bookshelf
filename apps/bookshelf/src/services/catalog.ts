@@ -3,9 +3,9 @@ import {
   type BookFormat,
   CATALOG_FILE,
   type Catalog,
+  type Storage,
 } from "@bookshelf/core";
 import type { ResponseCache } from "@/services/ports/cache";
-import type { Storage } from "@/services/ports/storage";
 
 /**
  * What a published library looks like is a contract with the sync tool, so it

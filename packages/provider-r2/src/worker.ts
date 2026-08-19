@@ -1,10 +1,39 @@
-import type {
-  Storage,
-  StoredContent,
-  StoredObject,
-} from "@/services/ports/storage";
+import type { Storage, StoredContent, StoredObject } from "@bookshelf/core";
 
-function describe(object: R2Object): StoredObject {
+/**
+ * The shape of the R2 binding, structurally rather than by importing the
+ * Cloudflare runtime types. A provider package should not drag a second copy of
+ * workerd's global declarations into whatever consumes it, and this states
+ * exactly which slice of R2 the app depends on.
+ */
+export type R2ObjectLike = {
+  key: string;
+  size: number;
+  httpEtag: string;
+  uploaded: Date;
+  httpMetadata?: { contentType?: string };
+};
+
+export type R2GetOptionsLike = {
+  range?: { offset: number; length: number };
+  onlyIf?: { etagDoesNotMatch: string };
+};
+
+export type R2BucketLike = {
+  head(key: string): Promise<R2ObjectLike | null>;
+  get(
+    key: string,
+    options?: R2GetOptionsLike,
+  ): Promise<
+    | (R2ObjectLike & {
+        body?: ReadableStream<Uint8Array>;
+        arrayBuffer(): Promise<ArrayBuffer>;
+      })
+    | null
+  >;
+};
+
+function describe(object: R2ObjectLike): StoredObject {
   return {
     key: object.key,
     size: object.size,
@@ -19,9 +48,8 @@ function normaliseEtag(etag: string): string {
   return etag.trim().replace(/^W\//, "").replace(/"/g, "");
 }
 
-/** Cloudflare R2, via a Worker binding. */
-export class R2Storage implements Storage {
-  constructor(private readonly bucket: R2Bucket) {}
+class R2Storage implements Storage {
+  constructor(private readonly bucket: R2BucketLike) {}
 
   async head(key: string): Promise<StoredObject | null> {
     const object = await this.bucket.head(key);
@@ -46,7 +74,7 @@ export class R2Storage implements Storage {
     return {
       object: describe(object),
       // R2 omits the body when the precondition matched.
-      body: "body" in object ? object.body : null,
+      body: object.body ?? null,
     };
   }
 
@@ -66,4 +94,9 @@ export class R2Storage implements Storage {
     if (!object) return null;
     return new Uint8Array(await object.arrayBuffer());
   }
+}
+
+/** Cloudflare R2 as the app reads it, over a Worker binding. */
+export function createStorage(bucket: R2BucketLike): Storage {
+  return new R2Storage(bucket);
 }

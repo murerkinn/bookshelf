@@ -1,100 +1,86 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-export const ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../..",
-);
-
-/** Where the Worker lives, and so where wrangler has to be run from. */
-export const WORKER_DIR = path.join(ROOT, "apps", "bookshelf");
+import { CONFIG_FILES, parseJsonc } from "@bookshelf/core";
 
 /**
- * Fixed by convention rather than passed in: drop books into one, the tree to
- * upload is built in the other. Both are gitignored.
+ * Where a library comes from and where it goes, read from a config file rather
+ * than fixed in the source.
+ *
+ * The file is optional — the defaults below are the conventional layout — and
+ * is found by walking up from the working directory, so the CLI behaves the
+ * same whether it is run from the project root or from inside a workspace.
+ * Its names and shape come from @bookshelf/core, because the app's build reads
+ * the same file to learn which provider it is being built for.
  */
-export const INPUT_DIR = path.join(ROOT, "books");
-export const OUTPUT_DIR = path.join(ROOT, "library");
-
-/** 4x the 60px slot the shelf renders covers into, so they stay sharp on retina. */
-export const DEFAULT_COVER_HEIGHT = 240;
+export { CONFIG_FILES };
+export const DEFAULTS = {
+  /** Drop books here. */
+  input: "books",
+  /** The tree to upload is built here. Regenerated on every run. */
+  output: "library",
+  /** 4x the 60px slot the shelf renders covers into, so they stay sharp. */
+  coverHeight: 240,
+  storage: {
+    provider: "r2",
+  },
+};
 
 export const BOOK_EXTENSIONS = new Set([".epub", ".pdf"]);
 
-/**
- * Strips comments from JSONC without mangling any that appear inside strings.
- */
-function stripComments(text) {
-  let out = "";
-  let inString = false;
-  let inLine = false;
-  let inBlock = false;
+async function readJsonc(file) {
+  return parseJsonc(await readFile(file, "utf8"));
+}
 
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const next = text[i + 1];
-
-    if (inLine) {
-      if (c === "\n") {
-        inLine = false;
-        out += c;
-      }
-      continue;
-    }
-    if (inBlock) {
-      if (c === "*" && next === "/") {
-        inBlock = false;
-        i++;
-      }
-      continue;
-    }
-    if (inString) {
-      out += c;
-      if (c === "\\") {
-        out += next ?? "";
-        i++;
-      } else if (c === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (c === '"') {
-      inString = true;
-      out += c;
-      continue;
-    }
-    if (c === "/" && next === "/") {
-      inLine = true;
-      i++;
-      continue;
-    }
-    if (c === "/" && next === "*") {
-      inBlock = true;
-      i++;
-      continue;
-    }
-    out += c;
+async function readIfPresent(file) {
+  try {
+    return await readJsonc(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new Error(`could not read ${file}: ${error.message}`);
   }
+}
 
-  return out;
+/** Walks up from `from` for the first directory holding a config file. */
+async function findConfig(from) {
+  let directory = path.resolve(from);
+
+  for (;;) {
+    for (const name of CONFIG_FILES) {
+      const file = path.join(directory, name);
+      const config = await readIfPresent(file);
+      if (config) return { file, config, root: directory };
+    }
+
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
 }
 
 /**
- * Reads the bucket to publish to out of wrangler.jsonc, so the script and the
- * deployed Worker can never disagree about where books live.
+ * Resolves the configuration for a run. Paths come back absolute, so nothing
+ * downstream has to know where the config file was found.
  */
-export async function readBucketConfig() {
-  const file = path.join(WORKER_DIR, "wrangler.jsonc");
-  const config = JSON.parse(stripComments(await readFile(file, "utf8")));
-  const bucket = config.r2_buckets?.[0];
-
-  if (!bucket?.bucket_name) {
-    throw new Error(`no r2_buckets entry found in ${file}`);
-  }
+export async function loadConfig({ cwd = process.cwd() } = {}) {
+  const found = await findConfig(cwd);
+  const root = found?.root ?? path.resolve(cwd);
+  const file = found?.config ?? {};
+  const { provider = DEFAULTS.storage.provider, ...options } =
+    file.storage ?? {};
 
   return {
-    bucket: bucket.bucket_name,
-    jurisdiction: bucket.jurisdiction,
+    root,
+    configFile: found?.file ?? null,
+    inputDir: path.resolve(root, file.input ?? DEFAULTS.input),
+    outputDir: path.resolve(root, file.output ?? DEFAULTS.output),
+    coverHeight: file.coverHeight ?? DEFAULTS.coverHeight,
+    /**
+     * Everything but `provider` belongs to the provider, so it is passed
+     * through whole rather than picked apart by a loader that cannot know what
+     * any given provider wants. `projectRoot` comes along so a provider can
+     * resolve its own relative paths against the project rather than the
+     * process — named so that it cannot collide with a provider's own key.
+     */
+    storage: { provider, projectRoot: root, ...options },
   };
 }

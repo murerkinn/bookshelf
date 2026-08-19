@@ -1,4 +1,4 @@
-import { R2Storage } from "@/services/adapters/r2-storage";
+import type { Storage } from "@bookshelf/core";
 import {
   openWorkersCache,
   WorkersCache,
@@ -6,7 +6,6 @@ import {
 import { CatalogService } from "@/services/catalog";
 import { BookContentService } from "@/services/content";
 import { NoopCache, type ResponseCache } from "@/services/ports/cache";
-import type { Storage } from "@/services/ports/storage";
 
 export type Services = {
   storage: Storage;
@@ -44,20 +43,23 @@ export function setServices(services: Services | null): void {
 }
 
 /**
- * The Cloudflare composition root: the one place that knows this is running on
- * Workers. Route handlers and pages call this and see only the interfaces, so
- * porting to another platform means writing adapters and another root like
- * this one, not touching the app.
+ * The composition root: the one place that names a provider.
+ *
+ * The provider is imported for the runtime the app is deployed to — R2 read
+ * through a Worker binding — and everything above this line sees only the
+ * contract, so porting means another root like this one rather than changes
+ * to the app.
  */
 export async function getServices(): Promise<Services> {
   if (override) return override;
 
   const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+  const { createStorage } = await import("@bookshelf/provider-r2/worker");
   const { env, ctx } = await getCloudflareContext({ async: true });
 
   const cache = await openWorkersCache();
   return createServices(
-    new R2Storage(env.BOOKS),
+    createStorage(env.BOOKS),
     // Absent under `next dev`, which runs in Node rather than workerd.
     cache
       ? new WorkersCache(cache, (work) => ctx.waitUntil(work))

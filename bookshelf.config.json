@@ -1,0 +1,11 @@
+{
+  "input": "books",
+  "output": "library",
+  "coverHeight": 240,
+  "storage": {
+    "provider": "r2",
+    "bucket": "books",
+    "jurisdiction": "eu",
+    "worker": "apps/bookshelf"
+  }
+}

@@ -15,6 +15,7 @@
     "sync": "node ./sync.mjs"
   },
   "dependencies": {
-    "@bookshelf/core": "*"
+    "@bookshelf/core": "*",
+    "@bookshelf/provider-r2": "*"
   }
 }
