@@ -2,33 +2,24 @@
   "name": "bookshelf",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.16.0",
+  "description": "A self-hostable ebook library over object storage",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "sync": "turbo run sync --log-prefix=none --output-logs=new-only --",
+    "deploy": "turbo run deploy --log-prefix=none --",
+    "preview": "turbo run preview --log-prefix=none --",
     "lint": "biome check",
-    "format": "biome format --write",
-    "sync": "node scripts/sync.mjs",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
-  },
-  "dependencies": {
-    "@opennextjs/cloudflare": "^1.20.2",
-    "epubjs": "^0.3.93",
-    "next": "16.3.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "format": "biome format --write"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.2",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "wrangler": "^4.123.0"
+    "turbo": "^2.10.11"
   }
 }
