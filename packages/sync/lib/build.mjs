@@ -9,12 +9,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  BOOK_EXTENSIONS,
-  CATALOG_FILE,
-  CATALOG_VERSION,
-  METADATA_FILE,
-} from "./config.mjs";
+import { CATALOG_FILE, CATALOG_VERSION, METADATA_FILE } from "@bookshelf/core";
+import { BOOK_EXTENSIONS } from "./config.mjs";
 import { readEpub } from "./epub.mjs";
 import { findRasteriser } from "./images.mjs";
 

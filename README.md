@@ -7,13 +7,14 @@ with a search box, and serves downloads through the Worker.
 
 ```
 apps/bookshelf   the app: a Next.js Worker over object storage
+packages/core    the library format and the ZIP reader
 packages/sync    the CLI that builds a library and publishes it
 books/           books in       ) configured in bookshelf.config.json,
 library/         upload tree out)  both gitignored
 ```
 
-A Turborepo workspace, so the app and the CLI can be worked on separately and
-each declares only what it actually needs.
+A Turborepo workspace, so `packages/core` is built before anything that imports
+it and the app and the CLI can never drift apart on what a library looks like.
 
 ## Layout
 

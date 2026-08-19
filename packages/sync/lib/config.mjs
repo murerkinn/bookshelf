@@ -17,10 +17,6 @@ export const WORKER_DIR = path.join(ROOT, "apps", "bookshelf");
 export const INPUT_DIR = path.join(ROOT, "books");
 export const OUTPUT_DIR = path.join(ROOT, "library");
 
-export const CATALOG_FILE = "catalog.json";
-export const METADATA_FILE = "metadata.json";
-export const CATALOG_VERSION = 1;
-
 /** 4x the 60px slot the shelf renders covers into, so they stay sharp on retina. */
 export const DEFAULT_COVER_HEIGHT = 240;
 

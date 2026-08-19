@@ -1,44 +1,19 @@
+import {
+  type Book,
+  type BookFormat,
+  CATALOG_FILE,
+  type Catalog,
+} from "@bookshelf/core";
 import type { ResponseCache } from "@/services/ports/cache";
 import type { Storage } from "@/services/ports/storage";
 
-/** One downloadable file inside a book's folder. */
-export type BookFormat = {
-  /** Lower-case extension, e.g. `epub`. */
-  format: string;
-  /** File name within the book's folder, e.g. `book.epub`. */
-  file: string;
-  size: number;
-};
-
 /**
- * A book, as recorded in its folder's `metadata.json` and copied into the
- * catalog. Everything here comes from the book's own package metadata, so no
- * part of the app has to infer meaning from a file name.
+ * What a published library looks like is a contract with the sync tool, so it
+ * lives in @bookshelf/core rather than being declared here and there. Re-exported
+ * so the rest of the app still has one place to import a book from.
  */
-export type Book = {
-  /** Folder name in the bucket, and the book's identity in URLs. */
-  id: string;
-  title: string;
-  authors: string[];
-  publisher?: string;
-  /** Publication date as recorded by the publisher, often just a year. */
-  published?: string;
-  language?: string;
-  identifier?: string;
-  description?: string;
-  /** Cover file name within the folder; absent when the book has none. */
-  cover?: string;
-  formats: BookFormat[];
-};
-
-export type Catalog = {
-  version: number;
-  generatedAt?: string;
-  books: Book[];
-};
-
-export const CATALOG_KEY = "catalog.json";
-export const METADATA_FILE = "metadata.json";
+export type { Book, BookFormat, Catalog } from "@bookshelf/core";
+export { bookKey } from "@bookshelf/core";
 
 /**
  * How long a catalog is reused. Every search keystroke re-renders the page, so
@@ -93,7 +68,7 @@ export class CatalogService {
   }
 
   private async load(): Promise<Book[]> {
-    const bytes = await this.storage.readBytes(CATALOG_KEY);
+    const bytes = await this.storage.readBytes(CATALOG_FILE);
     // An unpublished catalog is an empty shelf, not an error: the page says so.
     if (!bytes) return [];
 
@@ -123,11 +98,6 @@ export class CatalogService {
         .includes(needle),
     );
   }
-}
-
-/** The key an object inside a book's folder lives at. */
-export function bookKey(id: string, file: string): string {
-  return `${id}/${file}`;
 }
 
 /** The format a reader should open, preferring what renders best. */
