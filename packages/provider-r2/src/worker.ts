@@ -1,4 +1,8 @@
-import type { Storage, StoredContent, StoredObject } from "@bookshelf/core";
+import type {
+  StoredContent,
+  StoredObject,
+  WritableStorage,
+} from "@bookshelf/core";
 
 /**
  * The shape of the R2 binding, structurally rather than by importing the
@@ -19,6 +23,10 @@ export type R2GetOptionsLike = {
   onlyIf?: { etagDoesNotMatch: string };
 };
 
+export type R2PutOptionsLike = {
+  httpMetadata?: { contentType?: string };
+};
+
 export type R2BucketLike = {
   head(key: string): Promise<R2ObjectLike | null>;
   get(
@@ -31,6 +39,12 @@ export type R2BucketLike = {
       })
     | null
   >;
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView,
+    options?: R2PutOptionsLike,
+  ): Promise<unknown>;
+  delete(key: string): Promise<void>;
 };
 
 function describe(object: R2ObjectLike): StoredObject {
@@ -48,7 +62,7 @@ function normaliseEtag(etag: string): string {
   return etag.trim().replace(/^W\//, "").replace(/"/g, "");
 }
 
-class R2Storage implements Storage {
+class R2Storage implements WritableStorage {
   constructor(private readonly bucket: R2BucketLike) {}
 
   async head(key: string): Promise<StoredObject | null> {
@@ -94,9 +108,25 @@ class R2Storage implements Storage {
     if (!object) return null;
     return new Uint8Array(await object.arrayBuffer());
   }
+
+  async write(
+    key: string,
+    bytes: Uint8Array,
+    contentType?: string,
+  ): Promise<void> {
+    await this.bucket.put(
+      key,
+      bytes,
+      contentType ? { httpMetadata: { contentType } } : undefined,
+    );
+  }
+
+  async remove(key: string): Promise<void> {
+    await this.bucket.delete(key);
+  }
 }
 
 /** Cloudflare R2 as the app reads it, over a Worker binding. */
-export function createStorage(bucket: R2BucketLike): Storage {
+export function createStorage(bucket: R2BucketLike): WritableStorage {
   return new R2Storage(bucket);
 }

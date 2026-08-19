@@ -32,6 +32,9 @@ library/
     essential-math-for-data-science.epub
     essential-math-for-data-science.pdf    <- any number of formats
   catalog.json                             <- derived, regenerable
+  .bookshelf/                              <- the app's, not the sync tool's
+    profiles.json
+    progress/<profile>.json
 ```
 
 `metadata.json` holds what the book says about itself — title, authors,
@@ -39,6 +42,9 @@ publisher, date, identifier, description — read out of its own package
 document rather than guessed from a file name. `catalog.json` is only the
 concatenation of them, so it can be regenerated, or swapped for a different
 format entirely, without touching the library.
+
+`.bookshelf/` is the one thing here the sync tool did not put there, and so
+the one thing it must never take away.
 
 ## Publishing
 
@@ -86,6 +92,8 @@ and one costing 0.5 MB.
 A plain run uploads everything and removes anything the previous catalog listed
 that the new one does not, so deleting a book locally deletes it remotely.
 `--force` clears first instead, for when the bucket has drifted out of step.
+Neither touches `.bookshelf/`: providers leave it out of what they enumerate,
+so clearing the library never clears everyone's bookmarks with it.
 
 | flag | |
 | --- | --- |
@@ -121,7 +129,8 @@ and want different things:
 
 ```
 @bookshelf/provider-r2           its manifest — id, options, capabilities
-@bookshelf/provider-r2/worker    Storage: head, read, readBytes, readRange
+@bookshelf/provider-r2/worker    Storage: head, read, readBytes, readRange,
+                                 and optionally write, remove
 @bookshelf/provider-r2/node      StorageAdmin: read, put, remove,
                                  and optionally create, list, removeAll
 ```
@@ -143,6 +152,7 @@ run on a machine that has one.
 | `create` | `wrangler r2 bucket create` | `mkdir -p` |
 | `list` | — | walks the directory |
 | `removeAll` | — | empties the directory |
+| app can write | binding `put` | atomic rename |
 | credentials | a wrangler login | none |
 
 `create`, `list` and `removeAll` are optional because providers genuinely differ
@@ -192,6 +202,8 @@ packages/core/src/
   provider.ts     the contract — Storage, StorageAdmin, the manifest
   catalog.ts      the published shape — Book, Catalog, the file names, the
                   version. Both sides import it, neither redeclares it.
+  state.ts        the written-back shape, and the reserved prefix it lives
+                  under
   bytes.ts        ByteSource: size() and read(offset, length)
   zip.ts          the ZIP reader, written against ByteSource
 
@@ -214,6 +226,10 @@ startup.
 Deliberately absent from `Storage`: `list`. The catalog is what enumerates the
 library, so no request may discover books by walking the bucket. Enumeration
 lives on `StorageAdmin`, which never runs in the app.
+
+`write` and `remove` are on `Storage` but optional, because a provider may
+front a destination that genuinely cannot be written to. Callers narrow with
+`writableStorage()` and degrade rather than throwing.
 
 The app names both providers with fixed specifiers and picks between them at
 startup; the CLI resolves its provider from config at run time, because a CLI

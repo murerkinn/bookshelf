@@ -6,7 +6,9 @@
  * things:
  *
  *   Storage       what the app reads at request time, in whatever runtime it
- *                 is deployed to — ranged, streaming, no enumeration.
+ *                 is deployed to — ranged, streaming, no enumeration. It can
+ *                 also write, where the provider supports it, which is what
+ *                 lets the app keep profiles and reading positions.
  *   StorageAdmin  what the sync CLI manages the library with, in Node —
  *                 whole objects, local files, deletion, enumeration.
  *
@@ -62,6 +64,40 @@ export interface Storage {
     offset: number,
     length: number,
   ): Promise<Uint8Array<ArrayBuffer> | null>;
+
+  /**
+   * Stores a small object. Optional, because a provider may front a
+   * genuinely read-only destination — a mounted archive, someone else's
+   * bucket — and the alternative to optionality is a provider that lies.
+   *
+   * For state the app owns, not for publishing: the sync tool writes books
+   * through {@link StorageAdmin}, which streams them from disk instead of
+   * holding them in memory.
+   */
+  write?(key: string, bytes: Uint8Array, contentType?: string): Promise<void>;
+
+  /** Deletes one object. Optional alongside {@link Storage.write}. */
+  remove?(key: string): Promise<void>;
+}
+
+/** A {@link Storage} that has both halves of the write path. */
+export interface WritableStorage extends Storage {
+  write(key: string, bytes: Uint8Array, contentType?: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+/**
+ * The same storage, narrowed, or null where the provider cannot write.
+ *
+ * Callers branch on the result rather than calling and catching, so a
+ * read-only library degrades to a working shelf with no saved positions
+ * instead of to an error at the moment someone turns a page.
+ */
+export function writableStorage(storage: Storage): WritableStorage | null {
+  return typeof storage.write === "function" &&
+    typeof storage.remove === "function"
+    ? (storage as WritableStorage)
+    : null;
 }
 
 /**

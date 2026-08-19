@@ -19,7 +19,25 @@ export type {
   StorageAdmin,
   StoredContent,
   StoredObject,
+  WritableStorage,
 } from "./provider.js";
-export { capabilitiesOf } from "./provider.js";
+export { capabilitiesOf, writableStorage } from "./provider.js";
+export type {
+  BookProgress,
+  Profile,
+  Profiles,
+  Progress,
+} from "./state.js";
+export {
+  DEFAULT_PROFILE_ID,
+  DEFAULT_PROFILE_NAME,
+  defaultProfile,
+  isProfileId,
+  isStateKey,
+  PROFILES_FILE,
+  progressFile,
+  STATE_PREFIX,
+  STATE_VERSION,
+} from "./state.js";
 export type { ZipDirectory, ZipEntry } from "./zip.js";
 export { readZipDirectory, readZipEntry } from "./zip.js";
