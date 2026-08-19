@@ -9,6 +9,7 @@ with a search box, and serves downloads through the Worker.
 apps/bookshelf       the app: a Next.js Worker over object storage
 packages/core        the library format, the ZIP reader, the provider contract
 packages/provider-r2 Cloudflare R2, both halves of it
+packages/provider-fs the library as a directory on disk
 packages/sync        the CLI that builds a library and publishes it
 books/             books in       ) configured in bookshelf.config.json,
 library/           upload tree out)  both gitignored
@@ -127,9 +128,25 @@ The manifest is importable without credentials or a runtime, which is what lets
 the CLI name a provider's settings, and the docs describe them, without
 connecting to anything.
 
+Entry points are named for the runtime they need rather than the face they
+implement. R2 splits across two, because the app reads it from workerd and the
+CLI writes it from Node. The filesystem provider has one, `/node`, because both
+of its halves need a filesystem — and that is the same fact as the app having to
+run on a machine that has one.
+
+| | `r2` | `fs` |
+| --- | --- | --- |
+| read | Worker binding | `node:fs` |
+| publish | wrangler CLI | copies, hard-linked where it can |
+| `create` | `wrangler r2 bucket create` | `mkdir -p` |
+| `list` | — | walks the directory |
+| `removeAll` | — | empties the directory |
+| credentials | a wrangler login | none |
+
 `create`, `list` and `removeAll` are optional because providers genuinely differ
 in what their APIs offer, and the alternative to optionality is a provider that
-lies.
+lies. The two shipped here differ in exactly that way, which is the point of
+having two.
 
 R2 over wrangler cannot enumerate: wrangler exposes only get, put and delete for
 objects. So it implements `create` and leaves `list` and `removeAll` undefined,
@@ -137,7 +154,11 @@ and the sync works out the previous contents from the catalog it published last
 time — exact for a bucket only it manages, blind to anything put there by other
 means, and `--force` says so rather than implying it cleared more than it did.
 
-The R2 provider declares `concurrency: 1` when publishing locally, because
+A directory can be walked, so the filesystem provider implements everything, and
+`--force` on it empties the destination for real. Same flag, same code path in
+`bucket.mjs`, different guarantee — stated rather than assumed.
+
+The same provider declares `concurrency: 1` when publishing locally, because
 every local invocation boots a miniflare runtime that takes an exclusive lock on
 the state file and parallel writes fail with `SQLITE_BUSY`.
 

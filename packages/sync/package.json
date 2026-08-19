@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@bookshelf/core": "*",
+    "@bookshelf/provider-fs": "*",
     "@bookshelf/provider-r2": "*"
   }
 }
