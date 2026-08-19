@@ -63,6 +63,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
                 {writable ? (
                   <form action={renameProfile} className="flex gap-2">
                     <input type="hidden" name="id" value={profile.id} />
+                    <input type="hidden" name="from" value="/profiles" />
                     <input
                       name="name"
                       defaultValue={profile.name}
@@ -86,6 +87,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
               ) : (
                 <form action={switchProfile} className="shrink-0">
                   <input type="hidden" name="id" value={profile.id} />
+                  <input type="hidden" name="from" value="/profiles" />
                   <button type="submit" className={BUTTON}>
                     Switch
                   </button>
@@ -95,6 +97,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
               {writable && all.length > 1 && (
                 <form action={deleteProfile} className="shrink-0">
                   <input type="hidden" name="id" value={profile.id} />
+                  <input type="hidden" name="from" value="/profiles" />
                   <button
                     type="submit"
                     className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-black/5 hover:text-red-600 dark:hover:bg-white/10 dark:hover:text-red-400"
@@ -110,6 +113,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
 
       {writable && (
         <form action={createProfile} className="mt-8 flex gap-2">
+          <input type="hidden" name="from" value="/profiles" />
           <input
             name="name"
             placeholder="Add someone"
@@ -122,6 +126,12 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
             Add profile
           </button>
         </form>
+      )}
+
+      {writable && (
+        <p className="mt-3 text-sm text-zinc-500">
+          Adding a profile starts reading as it.
+        </p>
       )}
     </main>
   );
