@@ -214,6 +214,9 @@ apps/bookshelf/src/services/
     workers-cache.ts  the Workers Cache API
   catalog.ts      CatalogService — the shelf, from catalog.json
   content.ts      BookContentService — files from inside a book
+  profiles.ts     ProfileService — who is reading
+  progress.ts     ProgressService — how far they got
+  session.ts      which profile a request belongs to
   container.ts    createServices() wires them; getServices() is the only
                   place that names a provider
 ```
@@ -273,6 +276,10 @@ sits somewhere other than where it was built.
 interchangeable at run time: one needs a Worker binding, the other a filesystem,
 and whichever the deployment lacks must never be loaded.
 
+Keys arriving from URLs are resolved against the library root and rejected if
+they escape it, so `../` in a request cannot reach a file outside the published
+tree.
+
 There is no Workers cache in this mode, and none is needed: the catalog memo
 still spares the repeated reads, and the files are already local.
 
@@ -315,6 +322,34 @@ Reading position is kept in `localStorage` per book — per device, so it does n
 follow you between them. Layout is a choice of two pages, one page, or
 continuous scroll, remembered across books.
 
+## Profiles
+
+Everyone reading from the same library keeps their own place in each book. A
+library that has never been configured has one profile, called Reader, and no
+profile file at all — the default is implicit until something is actually
+changed, so a fresh install writes nothing it might never need.
+
+Profiles are not accounts. A cookie names one; it does not prove anything about
+who is holding it, and anyone who can reach the library can read as any profile
+in it. That is the right amount of ceremony for a shelf shared with the people
+you live with, and the wrong amount for one on the open internet — see
+[Not done yet](#not-done-yet).
+
+Positions are written to the browser first and to the library after a pause,
+which is what keeps page turns off the network: a chapter's worth of turns
+collapses into one write, and leaving the page flushes what is outstanding
+through `sendBeacon`. Both copies carry a timestamp and the newest wins, so
+picking a book up on a phone resumes where the laptop left off, and a reader
+that was offline does not lose its place to a stale copy.
+
+Storage the app cannot write to is not an error. `writableStorage()` returns
+null and reading positions stay in the browser exactly as they did before any
+of this existed.
+
+This costs one read of the profile's positions per shelf render, on top of the
+cached catalog. It is not cached, because a position saved a moment ago should
+show as *Continue* immediately.
+
 ## Caching
 
 The catalog is held in an in-isolate memo backed by the Workers Cache API, for
@@ -326,5 +361,6 @@ costs a 304 rather than a re-download.
 ## Not done yet
 
 - **There is no authentication.** Anyone with the URL can read and download the
-  whole library.
-- Reading progress is per-device.
+  whole library — and pick any profile while doing it. Profiles are a way to
+  keep housemates' bookmarks apart, not a way to keep anyone out.
+- Two devices reading as one profile at the same time is last-write-wins.

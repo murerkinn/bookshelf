@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EpubReader } from "@/app/read/[...key]/epub-reader";
 import { extension } from "@/lib/media";
 import { getServices } from "@/services/container";
+import { activeProfile } from "@/services/session";
 
 function encodeKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -39,7 +40,7 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
       </header>
 
       {extension(fileKey) === "epub" ? (
-        <EpubBody fileKey={fileKey} />
+        <EpubBody fileKey={fileKey} bookId={book.id} />
       ) : (
         // Anything else is handed to the browser's own viewer. PDFs render
         // natively; the inline disposition is what stops it downloading.
@@ -53,18 +54,32 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
   );
 }
 
-async function EpubBody({ fileKey }: { fileKey: string }) {
-  const { content } = await getServices();
+async function EpubBody({
+  fileKey,
+  bookId,
+}: {
+  fileKey: string;
+  bookId: string;
+}) {
+  const { content, progress } = await getServices();
+  const profile = await activeProfile();
 
-  // Resolving the package document also proves the archive is readable before
-  // the reader is handed anything.
-  const opfPath = await content.packageDocument(fileKey);
+  const [opfPath, saved] = await Promise.all([
+    // Resolving the package document also proves the archive is readable
+    // before the reader is handed anything.
+    content.packageDocument(fileKey),
+    progress.get(profile.id, bookId),
+  ]);
   if (!opfPath) notFound();
 
   return (
     <EpubReader
       opfUrl={`/book/${encodeKey(fileKey)}/${encodeKey(opfPath)}`}
       bookKey={fileKey}
+      bookId={bookId}
+      profileId={profile.id}
+      saved={saved}
+      canSync={progress.writable}
     />
   );
 }

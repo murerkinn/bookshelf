@@ -3,6 +3,7 @@ import { SearchInput } from "@/app/search-input";
 import { placeholder } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
+import { activeProfile } from "@/services/session";
 
 const COVER_CLASS =
   "h-15 w-10 shrink-0 rounded shadow-sm ring-1 ring-black/10 dark:ring-white/10";
@@ -59,9 +60,15 @@ export default async function Home(props: PageProps<"/">) {
   const { q } = await props.searchParams;
   const query = typeof q === "string" ? q : "";
 
-  const { catalog } = await getServices();
-  const books = await catalog.search(query);
-  const empty = (await catalog.all()).length === 0;
+  const { catalog, progress } = await getServices();
+  const profile = await activeProfile();
+
+  const [books, all, positions] = await Promise.all([
+    catalog.search(query),
+    catalog.all(),
+    progress.all(profile.id),
+  ]);
+  const empty = all.length === 0;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
@@ -115,7 +122,7 @@ export default async function Home(props: PageProps<"/">) {
                       href={`/read/${encodeKey(bookKey(book.id, readable.file))}`}
                       className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
                     >
-                      Read
+                      {positions[book.id] ? "Continue" : "Read"}
                     </Link>
                   )}
                   {book.formats.map((format) => (
