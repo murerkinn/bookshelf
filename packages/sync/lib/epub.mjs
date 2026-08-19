@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { readZipDirectory, readZipEntry } from "./zip.mjs";
+import { bytesSource, readZipDirectory, readZipEntry } from "@bookshelf/core";
 
 const IMAGE_EXTENSION_BY_MEDIA_TYPE = {
   "image/jpeg": ".jpg",
@@ -9,6 +9,12 @@ const IMAGE_EXTENSION_BY_MEDIA_TYPE = {
   "image/webp": ".webp",
   "image/avif": ".avif",
 };
+
+/** Entry bodies come back as bytes; every one read here is text or an image. */
+function decode(bytes) {
+  if (!bytes) throw new Error("unreadable zip entry");
+  return new TextDecoder().decode(bytes);
+}
 
 /** Resolves an EPUB-internal href against the directory holding the OPF. */
 function resolvePath(base, href) {
@@ -124,15 +130,15 @@ function findCover(opf) {
 
 /** Reads metadata and the cover image out of an EPUB in one pass. */
 export async function readEpub(file) {
-  const buffer = await readFile(file);
+  const source = bytesSource(await readFile(file));
 
-  const directory = readZipDirectory(buffer);
+  const directory = await readZipDirectory(source);
   if (!directory) throw new Error("not a valid ZIP archive");
 
   const containerEntry = directory.get("META-INF/container.xml");
   if (!containerEntry) throw new Error("no META-INF/container.xml");
 
-  const container = readZipEntry(buffer, containerEntry).toString("utf8");
+  const container = decode(await readZipEntry(source, containerEntry));
   const opfPath = container.match(
     /<rootfile\b[^>]*\bfull-path\s*=\s*"([^"]*)"/i,
   )?.[1];
@@ -140,7 +146,7 @@ export async function readEpub(file) {
 
   const opfEntry = directory.get(opfPath);
   if (!opfEntry) throw new Error(`missing package document: ${opfPath}`);
-  const opf = readZipEntry(buffer, opfEntry).toString("utf8");
+  const opf = decode(await readZipEntry(source, opfEntry));
 
   const metadata = parseMetadata(opf);
 
@@ -151,7 +157,7 @@ export async function readEpub(file) {
     const coverEntry = directory.get(coverPath);
     if (coverEntry) {
       cover = {
-        body: readZipEntry(buffer, coverEntry),
+        body: await readZipEntry(source, coverEntry),
         extension:
           IMAGE_EXTENSION_BY_MEDIA_TYPE[found.mediaType] ??
           path.extname(coverPath).toLowerCase() ??

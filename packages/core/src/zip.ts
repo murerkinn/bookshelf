@@ -1,8 +1,10 @@
-import type { Storage } from "@/services/ports/storage";
+import type { ByteSource } from "./bytes.js";
 
 /**
- * A minimal read-only ZIP reader that works over ranged reads, so opening a
- * 40 MB EPUB to read one chapter doesn't pull down 40 MB.
+ * A minimal read-only ZIP reader, written over {@link ByteSource} so that the
+ * same parser serves a book held in memory and a book in object storage. The
+ * ranged path is why opening a 40 MB EPUB to read one chapter doesn't cost
+ * 40 MB.
  *
  * Only the parts of the format EPUBs actually use are implemented: the central
  * directory, stored (method 0) and deflated (method 8) entries. Zip64 archives
@@ -25,6 +27,15 @@ export type ZipEntry = {
 
 export type ZipDirectory = Map<string, ZipEntry>;
 
+function viewOf(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+/**
+ * Decompression goes through `DecompressionStream` rather than `node:zlib`,
+ * which is what lets one implementation run in both workerd and Node and keeps
+ * this package free of any runtime-specific import.
+ */
 async function inflate(
   data: Uint8Array<ArrayBuffer>,
   method: number,
@@ -43,19 +54,21 @@ async function inflate(
 }
 
 /**
- * Reads the archive's central directory. Returns `null` when the object isn't a
- * ZIP, is Zip64, or is otherwise unreadable — callers treat that as "no cover".
+ * Reads the archive's central directory. Returns `null` when the source isn't a
+ * ZIP, is Zip64, or is otherwise unreadable — callers treat that as "no cover"
+ * or "not a readable book" rather than as an error.
  */
 export async function readZipDirectory(
-  storage: Storage,
-  key: string,
-  totalSize: number,
+  source: ByteSource,
 ): Promise<ZipDirectory | null> {
+  const totalSize = await source.size();
+  if (totalSize < 22) return null;
+
   const tailSize = Math.min(totalSize, MAX_EOCD_SIZE);
-  const tail = await storage.readRange(key, totalSize - tailSize, tailSize);
+  const tail = await source.read(totalSize - tailSize, tailSize);
   if (!tail || tail.length < 22) return null;
 
-  const tailView = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  const tailView = viewOf(tail);
 
   // The EOCD sits at the very end, but a trailing comment can push it back, so
   // scan backwards for its signature.
@@ -77,18 +90,10 @@ export async function readZipDirectory(
     return null;
   }
 
-  const directory = await storage.readRange(
-    key,
-    directoryOffset,
-    directorySize,
-  );
+  const directory = await source.read(directoryOffset, directorySize);
   if (!directory) return null;
 
-  const view = new DataView(
-    directory.buffer,
-    directory.byteOffset,
-    directory.byteLength,
-  );
+  const view = viewOf(directory);
   const entries: ZipDirectory = new Map();
   const decoder = new TextDecoder();
   let cursor = 0;
@@ -132,29 +137,30 @@ const EXTRA_FIELD_ALLOWANCE = 512;
  * implausibly large extra field falls back to a second read.
  */
 export async function readZipEntry(
-  storage: Storage,
-  key: string,
+  source: ByteSource,
   entry: ZipEntry,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   const nameLength = new TextEncoder().encode(entry.name).length;
   const speculative =
     30 + nameLength + EXTRA_FIELD_ALLOWANCE + entry.compressedSize;
 
-  const block = await storage.readRange(key, entry.localOffset, speculative);
+  const block = await source.read(entry.localOffset, speculative);
   if (!block || block.length < 30) return null;
 
-  const view = new DataView(block.buffer, block.byteOffset, block.byteLength);
+  const view = viewOf(block);
   if (view.getUint32(0, true) !== LOCAL_FILE_SIGNATURE) return null;
 
   const headerLength = 30 + view.getUint16(26, true) + view.getUint16(28, true);
   const end = headerLength + entry.compressedSize;
 
   if (end <= block.length) {
-    return inflate(block.subarray(headerLength, end), entry.method);
+    return inflate(
+      block.subarray(headerLength, end) as Uint8Array<ArrayBuffer>,
+      entry.method,
+    );
   }
 
-  const data = await storage.readRange(
-    key,
+  const data = await source.read(
     entry.localOffset + headerLength,
     entry.compressedSize,
   );

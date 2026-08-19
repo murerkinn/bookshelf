@@ -1,9 +1,11 @@
 import {
+  type ByteSource,
+  rangedSource,
   readZipDirectory,
   readZipEntry,
   type ZipDirectory,
   type ZipEntry,
-} from "@/lib/zip";
+} from "@bookshelf/core";
 import type { ResponseCache } from "@/services/ports/cache";
 import type { Storage } from "@/services/ports/storage";
 
@@ -33,6 +35,17 @@ export class BookContentService {
     private readonly cache: ResponseCache,
   ) {}
 
+  /**
+   * The archive as bytes the ZIP reader can range over. Its size is looked up
+   * lazily, so reading an entry — which needs only offsets — costs no HEAD.
+   */
+  private source(key: string): ByteSource {
+    return rangedSource(
+      async () => (await this.storage.head(key))?.size ?? 0,
+      (offset, length) => this.storage.readRange(key, offset, length),
+    );
+  }
+
   /** Returns null when the object is missing or is not a usable archive. */
   private async directory(key: string): Promise<ZipDirectory | null> {
     const remembered = memo.get(key);
@@ -47,10 +60,7 @@ export class BookContentService {
       return directory;
     }
 
-    const head = await this.storage.head(key);
-    if (!head) return null;
-
-    const directory = await readZipDirectory(this.storage, key, head.size);
+    const directory = await readZipDirectory(this.source(key));
     if (!directory) return null;
     remember(key, directory);
 
@@ -76,7 +86,7 @@ export class BookContentService {
     const entry = directory?.get(entryPath);
     if (!entry) return null;
 
-    return readZipEntry(this.storage, key, entry);
+    return readZipEntry(this.source(key), entry);
   }
 
   /**

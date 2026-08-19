@@ -1,7 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { CATALOG_FILE, METADATA_FILE } from "./config.mjs";
-import { contentTypeFor } from "./mime.mjs";
+import { CATALOG_FILE, contentTypeFor, METADATA_FILE } from "@bookshelf/core";
 import { pool, retry } from "./util.mjs";
 
 /** Used when a target does not state its own safe write concurrency. */

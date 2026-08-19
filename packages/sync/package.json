@@ -13,5 +13,8 @@
   ],
   "scripts": {
     "sync": "node ./sync.mjs"
+  },
+  "dependencies": {
+    "@bookshelf/core": "*"
   }
 }
