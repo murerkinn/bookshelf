@@ -6,18 +6,23 @@ import {
 import { CatalogService } from "@/services/catalog";
 import { BookContentService } from "@/services/content";
 import { NoopCache, type ResponseCache } from "@/services/ports/cache";
+import { ProfileService } from "@/services/profiles";
+import { ProgressService } from "@/services/progress";
 
 export type Services = {
   storage: Storage;
   cache: ResponseCache;
   catalog: CatalogService;
   content: BookContentService;
+  profiles: ProfileService;
+  progress: ProgressService;
 };
 
 /**
  * Wires the services to a set of adapters. This is the whole composition, and
  * it knows nothing about any provider — give it storage backed by S3 or a
- * filesystem and the app works unchanged.
+ * filesystem and the app works unchanged. Storage that cannot be written to
+ * still composes; profiles and reading positions degrade rather than fail.
  */
 export function createServices(
   storage: Storage,
@@ -28,6 +33,8 @@ export function createServices(
     cache,
     catalog: new CatalogService(storage, cache),
     content: new BookContentService(storage, cache),
+    profiles: new ProfileService(storage),
+    progress: new ProgressService(storage),
   };
 }
 
