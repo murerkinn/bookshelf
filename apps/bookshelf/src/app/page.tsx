@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProfileMenu } from "@/app/profile-menu";
 import { SearchInput } from "@/app/search-input";
 import { placeholder } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
@@ -60,19 +61,29 @@ export default async function Home(props: PageProps<"/">) {
   const { q } = await props.searchParams;
   const query = typeof q === "string" ? q : "";
 
-  const { catalog, progress } = await getServices();
+  const { catalog, profiles, progress } = await getServices();
   const profile = await activeProfile();
 
-  const [books, all, positions] = await Promise.all([
+  const [books, all, positions, everyone] = await Promise.all([
     catalog.search(query),
     catalog.all(),
     progress.all(profile.id),
+    profiles.list(),
   ]);
   const empty = all.length === 0;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Bookshelf</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Bookshelf</h1>
+
+        <ProfileMenu
+          profiles={everyone}
+          activeId={profile.id}
+          writable={profiles.writable}
+          from={query ? `/?q=${encodeURIComponent(query)}` : "/"}
+        />
+      </div>
 
       <SearchInput query={query} />
 

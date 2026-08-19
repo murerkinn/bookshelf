@@ -44,7 +44,7 @@ concatenation of them, so it can be regenerated, or swapped for a different
 format entirely, without touching the library.
 
 `.bookshelf/` is the one thing here the sync tool did not put there, and so
-the one thing it must never take away.
+the one thing it must never take away — see [Profiles](#profiles).
 
 ## Publishing
 
@@ -202,8 +202,8 @@ packages/core/src/
   provider.ts     the contract — Storage, StorageAdmin, the manifest
   catalog.ts      the published shape — Book, Catalog, the file names, the
                   version. Both sides import it, neither redeclares it.
-  state.ts        the written-back shape, and the reserved prefix it lives
-                  under
+  state.ts        the written-back shape — Profile, Progress, and the
+                  reserved prefix they live under
   bytes.ts        ByteSource: size() and read(offset, length)
   zip.ts          the ZIP reader, written against ByteSource
 
@@ -216,7 +216,7 @@ apps/bookshelf/src/services/
   content.ts      BookContentService — files from inside a book
   profiles.ts     ProfileService — who is reading
   progress.ts     ProgressService — how far they got
-  session.ts      which profile a request belongs to
+  session.ts      which profile a request belongs to, and how its cookie is set
   container.ts    createServices() wires them; getServices() is the only
                   place that names a provider
 ```
@@ -232,7 +232,8 @@ lives on `StorageAdmin`, which never runs in the app.
 
 `write` and `remove` are on `Storage` but optional, because a provider may
 front a destination that genuinely cannot be written to. Callers narrow with
-`writableStorage()` and degrade rather than throwing.
+`writableStorage()` and degrade rather than throwing, so a read-only library is
+a working shelf whose positions stay in the browser.
 
 The app names both providers with fixed specifiers and picks between them at
 startup; the CLI resolves its provider from config at run time, because a CLI
@@ -328,6 +329,18 @@ Everyone reading from the same library keeps their own place in each book. A
 library that has never been configured has one profile, called Reader, and no
 profile file at all — the default is implicit until something is actually
 changed, so a fresh install writes nothing it might never need.
+
+The shelf header holds the switcher: who is reading, everyone else in one
+click, and a field to add someone. Creating a profile starts reading as it,
+wherever it was created from — the alternative leaves the shelf showing another
+person's positions with nothing to say why. `/profiles` is for renaming and
+deleting, which are rarer and want more room.
+
+It is a `<details>` element, so switching and creating are ordinary form posts
+and work with scripting off; the client half only adds closing on Escape or on
+a click elsewhere. The cookie is set per request rather than per build, because
+a `Secure` cookie decided by NODE_ENV is one a browser silently discards over
+plain HTTP — which is exactly how a box on your own network is reached.
 
 Profiles are not accounts. A cookie names one; it does not prove anything about
 who is holding it, and anyone who can reach the library can read as any profile

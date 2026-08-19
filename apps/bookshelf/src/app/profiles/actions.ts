@@ -22,13 +22,31 @@ function text(form: FormData, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-/** Reports a failure through the URL, since there is no client state to hold it. */
+/**
+ * Where to return to. The switcher lives in the shelf header, so the answer is
+ * usually "the page you were already on" — supplied by the form rather than
+ * inferred, since a server action has no notion of a referrer it can trust.
+ *
+ * Checked rather than taken: a path that is not local is an open redirect, and
+ * this one arrives in a form field.
+ */
+function origin(form: FormData): string {
+  const from = text(form, "from");
+  return from.startsWith("/") && !from.startsWith("//") ? from : "/";
+}
+
+/** Reports a failure on the page that can explain it. */
 function fail(message: string): never {
   redirect(`/profiles?error=${encodeURIComponent(message)}`);
 }
 
 function reason(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+async function readAs(id: string): Promise<void> {
+  const store = await cookies();
+  store.set(PROFILE_COOKIE, id, await profileCookieOptions());
 }
 
 export async function switchProfile(form: FormData): Promise<void> {
@@ -38,24 +56,35 @@ export async function switchProfile(form: FormData): Promise<void> {
   const chosen = (await profiles.list()).find((profile) => profile.id === id);
   if (!chosen) fail("That profile no longer exists.");
 
-  const store = await cookies();
-  store.set(PROFILE_COOKIE, chosen.id, await profileCookieOptions());
+  await readAs(chosen.id);
 
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(origin(form));
 }
 
+/**
+ * Creates a profile and reads as it.
+ *
+ * Always switching is the one rule that holds wherever this is called from: a
+ * profile made from the header is you arriving, one made from the manage page
+ * is you setting someone up, and switching back is a single click either way.
+ * Creating without switching would leave the shelf showing someone else's
+ * positions with no sign that anything had happened.
+ */
 export async function createProfile(form: FormData): Promise<void> {
   const { profiles } = await getServices();
 
+  let created: { id: string };
   try {
-    await profiles.create(text(form, "name"));
+    created = await profiles.create(text(form, "name"));
   } catch (error) {
     fail(reason(error));
   }
 
+  await readAs(created.id);
+
   revalidatePath("/", "layout");
-  redirect("/profiles");
+  redirect(origin(form));
 }
 
 export async function renameProfile(form: FormData): Promise<void> {
@@ -68,7 +97,7 @@ export async function renameProfile(form: FormData): Promise<void> {
   }
 
   revalidatePath("/", "layout");
-  redirect("/profiles");
+  redirect(origin(form));
 }
 
 export async function deleteProfile(form: FormData): Promise<void> {
@@ -91,5 +120,5 @@ export async function deleteProfile(form: FormData): Promise<void> {
   }
 
   revalidatePath("/", "layout");
-  redirect("/profiles");
+  redirect(origin(form));
 }
