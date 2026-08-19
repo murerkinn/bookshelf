@@ -1,7 +1,9 @@
 # Bookshelf
 
-A single server-rendered page that lists the books in an R2 bucket, filters them
-with a search box, and serves downloads through the Worker.
+A self-hosted library for the ebooks you already own. One server-rendered page
+lists them, filters them with a search box, serves downloads, and reads EPUBs
+in the browser — as a Cloudflare Worker over R2, or as a Node server over a
+directory on disk.
 
 ## The repository
 
@@ -213,10 +215,61 @@ Deliberately absent from `Storage`: `list`. The catalog is what enumerates the
 library, so no request may discover books by walking the bucket. Enumeration
 lives on `StorageAdmin`, which never runs in the app.
 
+The app names both providers with fixed specifiers and picks between them at
+startup; the CLI resolves its provider from config at run time, because a CLI
+is not bundled ahead of time. Same package either way —
+`@bookshelf/provider-r2/worker` for one, `@bookshelf/provider-fs/node` for the
+other.
+
 One ZIP reader serves both sides because they differ only in where the bytes
 come from: the CLI holds a whole book in memory, the app pulls one chapter at a
 time out of storage. Decompression goes through `DecompressionStream` rather
 than `node:zlib`, which is what lets the same code run in workerd and in Node.
+
+## Running it without Cloudflare
+
+The filesystem provider is what makes the app runnable on a machine you own — a
+box on your own network, or a VPS — with no account anywhere.
+
+```jsonc
+// bookshelf.config.json
+{ "storage": { "provider": "fs", "directory": "shelf-data" } }
+```
+
+```bash
+npm run sync -- --create   # publishes into shelf-data/
+npm run build
+npm start -w @bookshelf/app
+```
+
+No environment variables: **`next.config.ts` reads the same
+`bookshelf.config.json` the sync tool reads, at build time, and bakes the
+provider into the bundle.** One file decides where the books go and where the
+app looks for them, which is the only way the two cannot disagree.
+
+It has to be build time rather than request time. On Workers there is no
+filesystem to read a config file from, and the two modes are different artifacts
+anyway — one Worker, one Node server. `BOOKSHELF_PROVIDER` and
+`BOOKSHELF_DIRECTORY` still override at startup, for a deployment whose library
+sits somewhere other than where it was built.
+
+`getServices()` imports each provider dynamically, because the two are not
+interchangeable at run time: one needs a Worker binding, the other a filesystem,
+and whichever the deployment lacks must never be loaded.
+
+There is no Workers cache in this mode, and none is needed: the catalog memo
+still spares the repeated reads, and the files are already local.
+
+### Choosing wrong
+
+Building for Cloudflare and then starting the app on Node does not fail, which
+is the trap. `getCloudflareContext()` quietly returns a local development proxy,
+so the shelf renders — showing whatever the local miniflare bucket holds rather
+than what is in R2, and looking merely empty rather than misconfigured.
+
+The app detects that case (a Node process, in production, with no Cache API) and
+says so on startup. A Worker with no `BOOKS` binding, and a filesystem build
+with no directory, both fail outright with what to do about it.
 
 ## Reading in the browser
 
