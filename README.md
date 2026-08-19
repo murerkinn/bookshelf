@@ -343,8 +343,8 @@ picking a book up on a phone resumes where the laptop left off, and a reader
 that was offline does not lose its place to a stale copy.
 
 Storage the app cannot write to is not an error. `writableStorage()` returns
-null and reading positions stay in the browser exactly as they did before any
-of this existed.
+null, the profiles page says so, and reading positions stay in the browser
+exactly as they did before any of this existed.
 
 This costs one read of the profile's positions per shelf render, on top of the
 cached catalog. It is not cached, because a position saved a moment ago should
