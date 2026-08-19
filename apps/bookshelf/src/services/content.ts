@@ -3,11 +3,11 @@ import {
   rangedSource,
   readZipDirectory,
   readZipEntry,
+  type Storage,
   type ZipDirectory,
   type ZipEntry,
 } from "@bookshelf/core";
 import type { ResponseCache } from "@/services/ports/cache";
-import type { Storage } from "@/services/ports/storage";
 
 /**
  * A book's archive layout never changes, so its central directory is worth

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@bookshelf/core": "*",
+    "@bookshelf/provider-r2": "*",
     "@opennextjs/cloudflare": "^1.20.2",
     "epubjs": "^0.3.93",
     "next": "16.3.1",

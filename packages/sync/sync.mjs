@@ -2,12 +2,14 @@
 /**
  * Builds the library and publishes it to the bucket.
  *
- *   npm run sync                build ./library from ./books, then upload it
- *   npm run sync -- --force    clear the bucket first
- *   npm run sync -- --dry-run  build the tree, upload nothing
+ *   bookshelf-sync              build the library, then upload it
+ *   bookshelf-sync --force      clear the bucket first
+ *   bookshelf-sync --dry-run    build the tree, upload nothing
  *
- * Input and output directories are fixed by convention — books go in ./books,
- * the tree to upload is built in ./library — and both are gitignored.
+ * Where books are read from, where the tree is built, and where it publishes to
+ * all come from bookshelf.config.json, found by walking up from the working
+ * directory. Without one, the conventional layout applies: books in ./books,
+ * the upload tree in ./library.
  *
  * Each book becomes a folder holding every format of it, its cover and the
  * metadata read out of the book itself, with a catalog at the root:
@@ -19,42 +21,42 @@
  *       essential-math-for-data-science.epub
  *     catalog.json
  *
- * Where it publishes to is a target (see lib/targets), so another provider is a
- * new file there rather than a change here.
+ * Where it publishes to is a provider package, resolved by importing it, so
+ * another destination is a package rather than a change here.
  */
 
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { syncLibrary } from "./lib/bucket.mjs";
 import { buildLibrary } from "./lib/build.mjs";
-import {
-  DEFAULT_COVER_HEIGHT,
-  INPUT_DIR,
-  OUTPUT_DIR,
-  ROOT,
-} from "./lib/config.mjs";
+import { CONFIG_FILES, DEFAULTS, loadConfig } from "./lib/config.mjs";
 import { findThumbnailer } from "./lib/images.mjs";
-import { createTarget, TARGET_NAMES } from "./lib/targets/index.mjs";
+import { BUILT_IN_IDS, createAdmin } from "./lib/providers.mjs";
 
 const USAGE = `usage: npm run sync -- [options]
 
   --force            clear the bucket before uploading
   --dry-run          build the library but publish nothing
   --local            publish to the local (miniflare) bucket, for testing
-  --target NAME      where to publish (default wrangler-r2; available: ${TARGET_NAMES.join(", ")})
-  --size N           cover thumbnail height in pixels (default ${DEFAULT_COVER_HEIGHT})
+  --create           provision the destination first, if the provider can
+  --provider NAME    which provider to publish through (built in: ${BUILT_IN_IDS.join(", ")};
+                     anything else is imported as a package)
+  --size N           cover thumbnail height in pixels
   --full             keep full-size covers instead of thumbnailing them
 
-Books are read from ./books and the upload tree is built in ./library.`;
+Directories and provider settings are read from ${CONFIG_FILES[0]}; the flags
+above override it for one run.`;
 
 function parseArgs(argv) {
   const options = {
     force: false,
     dryRun: false,
     local: false,
-    target: "wrangler-r2",
-    height: DEFAULT_COVER_HEIGHT,
     full: false,
+    create: false,
+    /** Left unset so the configured value shows through. */
+    provider: null,
+    height: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -62,13 +64,17 @@ function parseArgs(argv) {
     if (arg === "--force") options.force = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--local") options.local = true;
-    else if (arg === "--target") options.target = argv[++i];
+    else if (arg === "--create") options.create = true;
+    else if (arg === "--provider") options.provider = argv[++i];
     else if (arg === "--size") options.height = Number(argv[++i]);
     else if (arg === "--full") options.full = true;
     else throw new Error(`unknown option: ${arg}`);
   }
 
-  if (!Number.isInteger(options.height) || options.height <= 0) {
+  if (
+    options.height !== null &&
+    (!Number.isInteger(options.height) || options.height <= 0)
+  ) {
     throw new Error("--size must be a positive integer");
   }
 
@@ -95,22 +101,49 @@ async function main() {
     process.exit(1);
   }
 
-  if (!(await exists(INPUT_DIR))) {
-    const legacy = path.join(ROOT, "epub");
+  const config = await loadConfig();
+  const here = (file) => path.relative(config.root, file) || ".";
+
+  if (!(await exists(config.inputDir))) {
     console.error(
-      `No ${path.relative(ROOT, INPUT_DIR)}/ directory.` +
-        ((await exists(legacy))
-          ? "\n\nThere is an epub/ directory — this script now reads from books/.\n  mv epub books"
-          : `\n\nCreate it and put your books in it:\n  mkdir ${path.relative(ROOT, INPUT_DIR)}`),
+      `No ${here(config.inputDir)}/ directory.\n\n` +
+        `Create it and put your books in it:\n  mkdir ${here(config.inputDir)}` +
+        (config.configFile
+          ? ""
+          : `\n\nOr point somewhere else from a ${CONFIG_FILES[0]}:\n` +
+            `  { "input": "${DEFAULTS.input}", "output": "${DEFAULTS.output}" }`),
     );
     process.exit(1);
   }
 
-  // Resolved before any work, so an unknown target fails immediately rather
-  // than after building the whole library.
-  const target = options.dryRun
+  // Resolved before any work, so an unknown provider or a missing setting fails
+  // immediately rather than after building the whole library.
+  const admin = options.dryRun
     ? null
-    : await createTarget(options.target, { local: options.local });
+    : await createAdmin(options.provider ?? config.storage.provider, {
+        ...config.storage,
+        local: options.local,
+      });
+
+  for (const warning of admin?.warnings ?? []) {
+    console.warn(`warning: ${warning}\n`);
+  }
+
+  if (options.create) {
+    if (!admin) {
+      throw new Error("--create has nothing to do during a --dry-run");
+    }
+    if (!admin.create) {
+      throw new Error(
+        `${admin.name} cannot provision its destination; create it yourself first`,
+      );
+    }
+    log(
+      (await admin.create())
+        ? `Created the destination for ${admin.name}.`
+        : `Destination for ${admin.name} needed no creating.`,
+    );
+  }
 
   const thumb = options.full ? null : await findThumbnailer();
   if (!options.full && !thumb) {
@@ -122,13 +155,11 @@ async function main() {
     process.exit(1);
   }
 
-  log(
-    `Building ${path.relative(ROOT, OUTPUT_DIR)}/ from ${path.relative(ROOT, INPUT_DIR)}/…`,
-  );
+  log(`Building ${here(config.outputDir)}/ from ${here(config.inputDir)}/…`);
   const { books, failed } = await buildLibrary(
-    INPUT_DIR,
-    OUTPUT_DIR,
-    options,
+    config.inputDir,
+    config.outputDir,
+    { height: options.height ?? config.coverHeight },
     thumb,
     log,
   );
@@ -141,15 +172,13 @@ async function main() {
   );
 
   if (options.dryRun) {
-    log(
-      `\nDry run: ${path.relative(ROOT, OUTPUT_DIR)}/ is ready, nothing published.`,
-    );
+    log(`\nDry run: ${here(config.outputDir)}/ is ready, nothing published.`);
     return;
   }
 
   log("");
 
-  const result = await syncLibrary(target, OUTPUT_DIR, {
+  const result = await syncLibrary(admin, config.outputDir, {
     force: options.force,
     log,
   });
@@ -163,9 +192,9 @@ async function main() {
 
   if (options.force && !result.exact) {
     log(
-      "\nNote: this target cannot list the bucket, so --force cleared only what\n" +
-        "the previously published catalog recorded. Objects put there by other\n" +
-        "means are untouched.",
+      "\nNote: this provider cannot enumerate its destination, so --force cleared\n" +
+        "only what the previously published catalog recorded. Objects put there\n" +
+        "by other means are untouched.",
     );
   }
 
