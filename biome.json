@@ -9,12 +9,13 @@
     "ignoreUnknown": true,
     "includes": [
       "**",
-      "!node_modules",
-      "!.next",
-      "!.open-next",
-      "!dist",
-      "!build",
-      "!cloudflare-env.d.ts"
+      "!**/node_modules",
+      "!**/.next",
+      "!**/.open-next",
+      "!**/.turbo",
+      "!**/dist",
+      "!**/build",
+      "!**/cloudflare-env.d.ts"
     ]
   },
   "formatter": {

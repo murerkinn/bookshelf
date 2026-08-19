@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { ROOT } from "../config.mjs";
+import { WORKER_DIR } from "../config.mjs";
 
 const run = promisify(execFile);
 
@@ -27,7 +27,7 @@ export function createWranglerR2Target({ bucket, jurisdiction, local }) {
   async function wrangler(args, options = {}) {
     try {
       return await run("npx", ["wrangler", ...args], {
-        cwd: ROOT,
+        cwd: WORKER_DIR,
         maxBuffer: 1024 * 1024 * 256,
         ...options,
       });

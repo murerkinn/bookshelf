@@ -1,4 +1,4 @@
-@AGENTS.md
+@apps/bookshelf/AGENTS.md
 
 
 ## Writing commit messages
@@ -11,7 +11,7 @@ Follow the seven rules from <https://chris.beams.io/git-commit>:
 4. Do not end the subject line with a period.
 5. Use the imperative mood — the subject should complete "If applied, this commit will ___" (write `Add reading dispatcher`, not `Added` / `Adds` / `Fixed`).
 6. Wrap the body at 72 characters.
-7. Use the body to explain **what and why**, not how — the diff already shows how. Add a body only when the change needs context (motivation, side effects, trade-offs); skip it for trivial changes.
+7. Use the body to explain **what and why**, not how — the diff already shows how. Add a body only when the change needs context (motivation, side effects, trade-offs); skip it for trivial changes. Keep it short and focused.
 
 **Do not add any AI/tool attribution to commits.** No `Co-Authored-By` trailer, no "Generated with Claude Code", no signatures or emoji trailers. Write the message as the developer would.
 

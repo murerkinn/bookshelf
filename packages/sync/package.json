@@ -1,0 +1,17 @@
+{
+  "name": "@bookshelf/sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Builds a library from a folder of books and publishes it to object storage",
+  "type": "module",
+  "bin": {
+    "bookshelf-sync": "./sync.mjs"
+  },
+  "files": [
+    "sync.mjs",
+    "lib"
+  ],
+  "scripts": {
+    "sync": "node ./sync.mjs"
+  }
+}

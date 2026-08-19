@@ -3,6 +3,18 @@
 A single server-rendered page that lists the books in an R2 bucket, filters them
 with a search box, and serves downloads through the Worker.
 
+## The repository
+
+```
+apps/bookshelf   the app: a Next.js Worker over object storage
+packages/sync    the CLI that builds a library and publishes it
+books/           books in       ) configured in bookshelf.config.json,
+library/         upload tree out)  both gitignored
+```
+
+A Turborepo workspace, so the app and the CLI can be worked on separately and
+each declares only what it actually needs.
+
 ## Layout
 
 The bucket is one folder per book, plus a generated catalog:
@@ -59,7 +71,7 @@ that the new one does not, so deleting a book locally deletes it remotely.
 ### Where it publishes
 
 ```
-scripts/
+packages/sync/
   sync.mjs           the CLI
   lib/
     config.mjs       the fixed directories, and the bucket read from wrangler.jsonc
@@ -88,13 +100,21 @@ with `SQLITE_BUSY`.
 
 ## Commands
 
+All of these run from the repository root; Turborepo builds whatever the task
+depends on first.
+
 ```bash
-npm run dev         # local dev server, against the local R2 bucket
-npm run sync        # build the library and upload it to the bucket
-npm run preview     # build + run the Worker locally
-npm run deploy      # build + deploy to Cloudflare Workers
-npm run cf-typegen  # regenerate cloudflare-env.d.ts after editing wrangler.jsonc
+npm run dev          # local dev server, against the local R2 bucket
+npm run sync         # build the library and upload it to the bucket
+npm run build        # build every workspace
+npm run check-types  # typecheck every workspace
+npm run preview      # build + run the Worker locally
+npm run deploy       # build + deploy to Cloudflare Workers
+npm run lint         # biome, across the repo
 ```
+
+`npm run cf-typegen -w @bookshelf/app` regenerates `cloudflare-env.d.ts` after
+editing `wrangler.jsonc`.
 
 ## Architecture
 

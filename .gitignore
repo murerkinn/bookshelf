@@ -14,11 +14,17 @@
 /coverage
 
 # next.js
-/.next/
+.next/
 /out/
 
 # production
 /build
+
+# turborepo
+.turbo/
+
+# built packages
+packages/*/dist/
 
 # misc
 .DS_Store
@@ -44,6 +50,6 @@ next-env.d.ts
 .open-next/
 .wrangler/
 
-# the publish script's fixed directories: books in, upload tree out
+# the sync tool's directories, as configured in bookshelf.config.json
 /books/
 /library/

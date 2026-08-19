@@ -4,8 +4,11 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../..",
+  "../../..",
 );
+
+/** Where the Worker lives, and so where wrangler has to be run from. */
+export const WORKER_DIR = path.join(ROOT, "apps", "bookshelf");
 
 /**
  * Fixed by convention rather than passed in: drop books into one, the tree to
@@ -86,7 +89,7 @@ function stripComments(text) {
  * deployed Worker can never disagree about where books live.
  */
 export async function readBucketConfig() {
-  const file = path.join(ROOT, "wrangler.jsonc");
+  const file = path.join(WORKER_DIR, "wrangler.jsonc");
   const config = JSON.parse(stripComments(await readFile(file, "utf8")));
   const bucket = config.r2_buckets?.[0];
 
