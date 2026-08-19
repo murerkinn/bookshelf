@@ -8,6 +8,7 @@
  */
 const BUILT_IN = {
   r2: "@bookshelf/provider-r2",
+  fs: "@bookshelf/provider-fs",
 };
 
 export const BUILT_IN_IDS = Object.keys(BUILT_IN);
