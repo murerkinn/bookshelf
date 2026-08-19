@@ -6,18 +6,22 @@ import {
   open,
   readdir,
   readFile,
+  rename,
   rm,
   rmdir,
   stat,
+  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
   contentTypeFor,
-  type Storage,
+  isStateKey,
+  STATE_PREFIX,
   type StorageAdmin,
   type StoredContent,
   type StoredObject,
+  type WritableStorage,
 } from "@bookshelf/core";
 import type { FsConfig } from "./manifest.js";
 
@@ -76,7 +80,7 @@ async function statFile(file: string): Promise<Stats | null> {
   }
 }
 
-class FsStorage implements Storage {
+class FsStorage implements WritableStorage {
   constructor(private readonly root: string) {}
 
   async head(key: string): Promise<StoredObject | null> {
@@ -156,10 +160,31 @@ class FsStorage implements Storage {
       await handle.close();
     }
   }
+
+  async write(key: string, bytes: Uint8Array): Promise<void> {
+    const file = resolveKey(this.root, key);
+    if (!file) throw new Error(`key escapes the library: ${key}`);
+
+    await mkdir(path.dirname(file), { recursive: true });
+    // Written beside the target and renamed, so a process that dies midway
+    // leaves the previous version intact rather than a truncated one. These
+    // are the only files the app owns, and losing them loses bookmarks.
+    const temporary = `${file}.${process.pid.toString(36)}.tmp`;
+    await writeFile(temporary, bytes);
+    await rename(temporary, file);
+  }
+
+  async remove(key: string): Promise<void> {
+    const file = resolveKey(this.root, key);
+    if (!file) return;
+
+    await rm(file, { force: true });
+    await pruneEmpty(this.root, file);
+  }
 }
 
 /** The library as the app reads it: a directory it can open files in. */
-export function createStorage(config: Config): Storage {
+export function createStorage(config: Config): WritableStorage {
   return new FsStorage(rootOf(config));
 }
 
@@ -171,15 +196,22 @@ async function walk(root: string): Promise<string[]> {
       recursive: true,
     });
 
-    return entries
-      .filter((entry) => entry.isFile())
-      .map((entry) =>
-        path
-          .relative(root, path.join(entry.parentPath, entry.name))
-          .split(path.sep)
-          .join("/"),
-      )
-      .sort();
+    return (
+      entries
+        .filter((entry) => entry.isFile())
+        .map((entry) =>
+          path
+            .relative(root, path.join(entry.parentPath, entry.name))
+            .split(path.sep)
+            .join("/"),
+        )
+        // Profiles and reading positions are the app's, not the library's. The
+        // sync tool removes whatever it can enumerate and did not just upload,
+        // so leaving them out of the walk is what keeps `--force` from taking
+        // everyone's bookmarks with it.
+        .filter((key) => !isStateKey(key))
+        .sort()
+    );
   } catch {
     // A destination that does not exist yet holds nothing, which is not an
     // error — the first publish creates it.
@@ -266,8 +298,10 @@ export function createAdmin(config: Config): StorageAdmin {
 
     async removeAll() {
       const keys = await walk(root);
+      const reserved = STATE_PREFIX.replace(/\/$/, "");
 
       for (const entry of await readdir(root).catch(() => [])) {
+        if (entry === reserved) continue;
         await rm(path.join(root, entry), { recursive: true, force: true });
       }
 
