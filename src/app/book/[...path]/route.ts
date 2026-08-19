@@ -1,0 +1,67 @@
+import { entryContentType } from "@/lib/media";
+import { getServices } from "@/services/container";
+
+/**
+ * A book's contents are fixed for a given key, and the reader re-requests
+ * chapters as the user moves around, so these are worth caching hard.
+ */
+const MAX_AGE_SECONDS = 604800;
+
+/**
+ * Splits `/book/<book file key>/<entry path>` into its two halves. Both contain
+ * slashes, so the boundary is the first segment ending in `.epub` — unambiguous
+ * because the entry path lives inside that archive.
+ */
+function split(segments: string[]): { key: string; entryPath: string } | null {
+  const boundary = segments.findIndex((segment) =>
+    segment.toLowerCase().endsWith(".epub"),
+  );
+  if (boundary === -1 || boundary === segments.length - 1) return null;
+
+  return {
+    key: segments.slice(0, boundary + 1).join("/"),
+    entryPath: segments.slice(boundary + 1).join("/"),
+  };
+}
+
+/**
+ * Serves a single file from inside an EPUB, letting the reader fetch chapters
+ * one at a time instead of downloading a whole book to show its first page.
+ */
+export async function GET(
+  request: Request,
+  routeContext: RouteContext<"/book/[...path]">,
+) {
+  const { path } = await routeContext.params;
+  const target = split(path);
+  if (!target) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const { content, cache } = await getServices();
+
+  const cacheKey = request.url;
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  const body = await content.entry(target.key, target.entryPath);
+  if (!body) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const response = new Response(body, {
+    headers: {
+      "content-type": entryContentType(target.entryPath),
+      "content-length": String(body.byteLength),
+      "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
+      // Book markup is untrusted. The reader renders it in a sandboxed iframe
+      // without scripting, and this keeps that true for anyone who opens one of
+      // these URLs directly.
+      "content-security-policy": "sandbox allow-same-origin",
+      "x-content-type-options": "nosniff",
+    },
+  });
+
+  cache.put(cacheKey, response.clone());
+  return response;
+}

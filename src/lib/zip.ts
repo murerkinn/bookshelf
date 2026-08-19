@@ -1,0 +1,164 @@
+import type { Storage } from "@/services/ports/storage";
+
+/**
+ * A minimal read-only ZIP reader that works over ranged reads, so opening a
+ * 40 MB EPUB to read one chapter doesn't pull down 40 MB.
+ *
+ * Only the parts of the format EPUBs actually use are implemented: the central
+ * directory, stored (method 0) and deflated (method 8) entries. Zip64 archives
+ * are rejected rather than mis-parsed.
+ */
+
+const EOCD_SIGNATURE = 0x06054b50;
+const CENTRAL_FILE_SIGNATURE = 0x02014b50;
+const LOCAL_FILE_SIGNATURE = 0x04034b50;
+
+/** 22-byte EOCD record plus the largest possible 64 KB trailing comment. */
+const MAX_EOCD_SIZE = 22 + 0xffff;
+
+export type ZipEntry = {
+  name: string;
+  method: number;
+  compressedSize: number;
+  localOffset: number;
+};
+
+export type ZipDirectory = Map<string, ZipEntry>;
+
+async function inflate(
+  data: Uint8Array<ArrayBuffer>,
+  method: number,
+): Promise<Uint8Array<ArrayBuffer>> {
+  if (method === 0) return data;
+  if (method !== 8) {
+    throw new Error(`unsupported zip compression method: ${method}`);
+  }
+
+  const stream = new Response(data).body?.pipeThrough(
+    new DecompressionStream("deflate-raw"),
+  );
+  if (!stream) throw new Error("failed to open decompression stream");
+
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/**
+ * Reads the archive's central directory. Returns `null` when the object isn't a
+ * ZIP, is Zip64, or is otherwise unreadable — callers treat that as "no cover".
+ */
+export async function readZipDirectory(
+  storage: Storage,
+  key: string,
+  totalSize: number,
+): Promise<ZipDirectory | null> {
+  const tailSize = Math.min(totalSize, MAX_EOCD_SIZE);
+  const tail = await storage.readRange(key, totalSize - tailSize, tailSize);
+  if (!tail || tail.length < 22) return null;
+
+  const tailView = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+
+  // The EOCD sits at the very end, but a trailing comment can push it back, so
+  // scan backwards for its signature.
+  let eocd = -1;
+  for (let i = tail.length - 22; i >= 0; i--) {
+    if (tailView.getUint32(i, true) === EOCD_SIGNATURE) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) return null;
+
+  const entryCount = tailView.getUint16(eocd + 10, true);
+  const directorySize = tailView.getUint32(eocd + 12, true);
+  const directoryOffset = tailView.getUint32(eocd + 16, true);
+
+  // Zip64 marks these fields as saturated; we don't support the extension.
+  if (directoryOffset === 0xffffffff || directorySize === 0xffffffff) {
+    return null;
+  }
+
+  const directory = await storage.readRange(
+    key,
+    directoryOffset,
+    directorySize,
+  );
+  if (!directory) return null;
+
+  const view = new DataView(
+    directory.buffer,
+    directory.byteOffset,
+    directory.byteLength,
+  );
+  const entries: ZipDirectory = new Map();
+  const decoder = new TextDecoder();
+  let cursor = 0;
+
+  for (let i = 0; i < entryCount; i++) {
+    if (cursor + 46 > directory.length) break;
+    if (view.getUint32(cursor, true) !== CENTRAL_FILE_SIGNATURE) break;
+
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const name = decoder.decode(
+      directory.subarray(cursor + 46, cursor + 46 + nameLength),
+    );
+
+    entries.set(name, { name, method, compressedSize, localOffset });
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+/**
+ * Room for the local header's extra field, which the central directory doesn't
+ * predict. Timestamp and Unix-attribute fields run to a few dozen bytes; 512 is
+ * far past anything in practice, and overshooting only wastes those bytes.
+ */
+const EXTRA_FIELD_ALLOWANCE = 512;
+
+/**
+ * Reads and decompresses a single entry.
+ *
+ * The entry's data doesn't begin at a position the central directory records —
+ * a local header of unknown length sits in front of it. Reading that header
+ * first and the data second would make every entry cost two sequential round
+ * trips, so instead one read covers the header, a generous allowance for it,
+ * and the data, and the header is parsed back out of the result. Only an
+ * implausibly large extra field falls back to a second read.
+ */
+export async function readZipEntry(
+  storage: Storage,
+  key: string,
+  entry: ZipEntry,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  const nameLength = new TextEncoder().encode(entry.name).length;
+  const speculative =
+    30 + nameLength + EXTRA_FIELD_ALLOWANCE + entry.compressedSize;
+
+  const block = await storage.readRange(key, entry.localOffset, speculative);
+  if (!block || block.length < 30) return null;
+
+  const view = new DataView(block.buffer, block.byteOffset, block.byteLength);
+  if (view.getUint32(0, true) !== LOCAL_FILE_SIGNATURE) return null;
+
+  const headerLength = 30 + view.getUint16(26, true) + view.getUint16(28, true);
+  const end = headerLength + entry.compressedSize;
+
+  if (end <= block.length) {
+    return inflate(block.subarray(headerLength, end), entry.method);
+  }
+
+  const data = await storage.readRange(
+    key,
+    entry.localOffset + headerLength,
+    entry.compressedSize,
+  );
+  if (!data) return null;
+
+  return inflate(data, entry.method);
+}
