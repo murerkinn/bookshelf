@@ -4,6 +4,19 @@
   "private": true,
   "license": "MIT",
   "description": "The library format and the ZIP reader, shared by the app and the sync tool",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

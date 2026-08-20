@@ -4,6 +4,19 @@
   "private": true,
   "license": "MIT",
   "description": "Cloudflare R2 provider: a Worker binding to read, the wrangler CLI to publish",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "packages/provider-r2"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

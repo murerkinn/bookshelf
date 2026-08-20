@@ -4,6 +4,19 @@
   "private": true,
   "license": "MIT",
   "description": "The bookshelf itself: a server-rendered library over object storage",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "apps/bookshelf"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
