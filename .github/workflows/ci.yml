@@ -31,7 +31,7 @@ jobs:
       # the typecheck reads a pinned @types/node, so neither can vary by
       # runtime — and nothing here executes the project's own code. It belongs
       # on a test job, once there is one.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -59,7 +59,7 @@ jobs:
           # token has no reason to outlive the checkout step.
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
