@@ -126,6 +126,9 @@ export async function readZipDirectory(
  */
 const EXTRA_FIELD_ALLOWANCE = 512;
 
+/** Flags bit 3: sizes live in a trailing data descriptor, not in the header. */
+const DATA_DESCRIPTOR_FLAG = 0x08;
+
 /**
  * Reads and decompresses a single entry.
  *
@@ -135,6 +138,17 @@ const EXTRA_FIELD_ALLOWANCE = 512;
  * trips, so instead one read covers the header, a generous allowance for it,
  * and the data, and the header is parsed back out of the result. Only an
  * implausibly large extra field falls back to a second read.
+ *
+ * The header is also believed over the directory about how long the data is.
+ * A caller may hold a directory that no longer describes the object — the app
+ * memoises one per book, and republishing replaces the object underneath it —
+ * and a stale length silently truncates the entry, which is far worse than
+ * failing. Where the header cannot say (a streamed archive puts its sizes in a
+ * trailing descriptor) the directory is all there is, and stands.
+ *
+ * Returns null when the entry is not where it was said to be, which is the
+ * other way a stale directory shows up. Callers that cache one can take that
+ * as a reason to read it again.
  */
 export async function readZipEntry(
   source: ByteSource,
@@ -150,8 +164,20 @@ export async function readZipEntry(
   const view = viewOf(block);
   if (view.getUint32(0, true) !== LOCAL_FILE_SIGNATURE) return null;
 
-  const headerLength = 30 + view.getUint16(26, true) + view.getUint16(28, true);
-  const end = headerLength + entry.compressedSize;
+  // Compared by length rather than by bytes: a name is stored in whatever
+  // encoding the archive was written with, so decoding and re-encoding it is
+  // not guaranteed to round-trip, and a mismatch there would reject a
+  // perfectly good entry. The length is enough to catch an offset pointing at
+  // some other entry's header.
+  if (view.getUint16(26, true) !== nameLength) return null;
+
+  const streamed = (view.getUint16(6, true) & DATA_DESCRIPTOR_FLAG) !== 0;
+  const declared = view.getUint32(18, true);
+  const compressedSize =
+    !streamed && declared > 0 ? declared : entry.compressedSize;
+
+  const headerLength = 30 + nameLength + view.getUint16(28, true);
+  const end = headerLength + compressedSize;
 
   if (end <= block.length) {
     return inflate(
@@ -162,7 +188,7 @@ export async function readZipEntry(
 
   const data = await source.read(
     entry.localOffset + headerLength,
-    entry.compressedSize,
+    compressedSize,
   );
   if (!data) return null;
 

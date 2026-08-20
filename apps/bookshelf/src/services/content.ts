@@ -46,13 +46,16 @@ export class BookContentService {
     );
   }
 
+  private cacheKey(key: string): string {
+    return `https://bookshelf.internal/zip/${encodeURIComponent(key)}`;
+  }
+
   /** Returns null when the object is missing or is not a usable archive. */
   private async directory(key: string): Promise<ZipDirectory | null> {
     const remembered = memo.get(key);
     if (remembered) return remembered;
 
-    const cacheKey = `https://bookshelf.internal/zip/${encodeURIComponent(key)}`;
-    const stored = await this.cache.match(cacheKey);
+    const stored = await this.cache.match(this.cacheKey(key));
     if (stored) {
       const entries = (await stored.json()) as Record<string, ZipEntry>;
       const directory: ZipDirectory = new Map(Object.entries(entries));
@@ -60,12 +63,22 @@ export class BookContentService {
       return directory;
     }
 
+    return this.reread(key);
+  }
+
+  /**
+   * Reads the directory from the object itself, replacing whatever was kept.
+   *
+   * Both copies are replaced rather than dropped: leaving the response cache
+   * holding the old one would just hand it back on the next request.
+   */
+  private async reread(key: string): Promise<ZipDirectory | null> {
     const directory = await readZipDirectory(this.source(key));
     if (!directory) return null;
     remember(key, directory);
 
     this.cache.put(
-      cacheKey,
+      this.cacheKey(key),
       new Response(JSON.stringify(Object.fromEntries(directory)), {
         headers: {
           "content-type": "application/json",
@@ -86,7 +99,22 @@ export class BookContentService {
     const entry = directory?.get(entryPath);
     if (!entry) return null;
 
-    return readZipEntry(this.source(key), entry);
+    const bytes = await readZipEntry(this.source(key), entry);
+    if (bytes) return bytes;
+
+    // The directory said there was an entry here and there was not. The
+    // likely reason is that the directory is one we kept and the object has
+    // been replaced since — republishing a book does exactly that, and the
+    // key does not change — so read the directory again and try once more.
+    //
+    // Only on a read that failed, never on an entry the directory does not
+    // list at all: that is an ordinary 404, and re-reading on those would let
+    // any made-up path cost two extra reads.
+    const fresh = await this.reread(key);
+    const moved = fresh?.get(entryPath);
+    if (!moved || moved.localOffset === entry.localOffset) return null;
+
+    return readZipEntry(this.source(key), moved);
   }
 
   /**
