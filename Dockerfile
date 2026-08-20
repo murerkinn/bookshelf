@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # The floor this project declares in engines and .nvmrc.
-ARG NODE_VERSION=22
+ARG NODE_VERSION=24
 
 # Dependencies first, from the manifests alone, so editing source does not
 # invalidate the install layer.
