@@ -28,10 +28,54 @@ function chunk(type, data) {
 }
 
 /**
- * A solid-colour PNG. Real image bytes rather than a stub, because the sync
- * tool hands covers to cwebp or sips and those will not thumbnail a fake.
+ * A cover that reads as a cover: a vertical gradient with two lighter bands
+ * where a title and an author would sit. A flat rectangle is easier to
+ * generate and looks, at thumbnail size, exactly like a cover that failed to
+ * load — which is the wrong thing for a demo shelf to suggest.
  */
-export function png(width, height, [r, g, b]) {
+export function coverArt(width, height, [r, g, b]) {
+  const pixel = (x, y) => {
+    // Darker towards the bottom, by up to a third.
+    const shade = 1 - (y / height) * 0.35;
+    let [pr, pg, pb] = [r * shade, g * shade, b * shade];
+
+    const inset = Math.round(width * 0.16);
+    const band = (top, thickness) =>
+      y >= Math.round(height * top) &&
+      y < Math.round(height * top) + thickness &&
+      x >= inset &&
+      x < width - inset;
+
+    // A title block and a shorter author line under it. Deliberately chunky:
+    // the shelf renders a cover into a 40x60 slot, so anything thinner than
+    // about 6% of the height washes out entirely on the way down.
+    if (band(0.52, Math.round(height * 0.09))) {
+      [pr, pg, pb] = [pr + 120, pg + 120, pb + 118];
+    } else if (
+      band(0.66, Math.round(height * 0.05)) &&
+      x < width - inset - Math.round(width * 0.3)
+    ) {
+      [pr, pg, pb] = [pr + 80, pg + 80, pb + 78];
+    }
+
+    return [
+      Math.min(255, Math.round(pr)),
+      Math.min(255, Math.round(pg)),
+      Math.min(255, Math.round(pb)),
+    ];
+  };
+
+  return png(width, height, pixel);
+}
+
+/**
+ * A PNG from a pixel function. Real image bytes rather than a stub, because
+ * the sync tool hands covers to cwebp or sips and those will not thumbnail a
+ * fake.
+ *
+ * @param {(x: number, y: number) => [number, number, number]} pixel
+ */
+export function png(width, height, pixel) {
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width, false);
@@ -49,6 +93,7 @@ export function png(width, height, [r, g, b]) {
     raw[row] = 0;
     for (let x = 0; x < width; x++) {
       const px = row + 1 + x * 3;
+      const [r, g, b] = pixel(x, y);
       raw[px] = r;
       raw[px + 1] = g;
       raw[px + 2] = b;
@@ -68,6 +113,40 @@ year belong to a real work in the public domain; the words on this page do not
 — they are filler, so that a shelf and a reader can be exercised without
 shipping anyone's prose.`;
 
+const SENTENCES = [
+  "The archive holds a catalogue, and the catalogue holds this page.",
+  "A reader asks for one chapter at a time, and gets one chapter at a time.",
+  "Between the shelf and the page there is a range request and very little else.",
+  "Nothing here was written by anyone; it was assembled to take up room.",
+  "A paragraph long enough to wrap is a paragraph worth having in a fixture.",
+  "The position of this sentence can be saved, and later restored.",
+  "Two columns, one column, or a single scroll: the words do not mind.",
+  "Storage keeps the bytes, the catalogue keeps the order, the reader keeps the place.",
+  "If this text is visible, an entry was found, decompressed and rendered.",
+  "The next chapter says much the same, at a different offset.",
+];
+
+/**
+ * Enough prose to fill a page, so that paginating and turning are exercised
+ * rather than merely available. Deterministic: the same chapter of the same
+ * book always reads the same way.
+ */
+function filler(seed, paragraphs = 6) {
+  let state = seed * 2654435761 + 1;
+  const next = () => {
+    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    return state / 0x7fffffff;
+  };
+
+  return Array.from({ length: paragraphs }, () => {
+    const count = 4 + Math.floor(next() * 4);
+    return Array.from(
+      { length: count },
+      () => SENTENCES[Math.floor(next() * SENTENCES.length)],
+    ).join(" ");
+  });
+}
+
 function escapeXml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -85,6 +164,9 @@ function chapterXhtml(title, heading, index) {
       <h1>${escapeXml(heading)}</h1>
       <p><em>${escapeXml(title)}</em>, chapter ${index}.</p>
       <p>${escapeXml(PLACEHOLDER.replace(/\n/g, " "))}</p>
+      ${filler(index)
+        .map((paragraph) => `<p>${escapeXml(paragraph)}</p>`)
+        .join("\n      ")}
     </section>
   </body>
 </html>
@@ -199,7 +281,7 @@ export function epub(book) {
     { name: "OEBPS/content.opf", content: opf },
     { name: "OEBPS/nav.xhtml", content: nav },
     ...(cover
-      ? [{ name: "OEBPS/cover.png", content: png(240, 360, colour) }]
+      ? [{ name: "OEBPS/cover.png", content: coverArt(240, 360, colour) }]
       : []),
     ...chapterFiles.map((c, i) => ({
       name: `OEBPS/${c.href}`,
