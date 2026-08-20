@@ -46,7 +46,7 @@
     "@bookshelf/core": "*"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^26",
     "typescript": "^5"
   }
 }
