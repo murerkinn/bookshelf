@@ -100,8 +100,25 @@ set of public-domain titles, and it downloads nothing:
 
 ```bash
 npm run demo                 # writes 8 books into books/
-npm run sync -- --create     # or: docker compose run --rm sync --create
 ```
+
+Then publish and serve them by whichever route you picked above. Note that the
+config in this repository points at R2, so `npm run sync` will go there unless
+you change it — for a local look, the filesystem is the shorter way round:
+
+```jsonc
+// bookshelf.config.json
+{ "storage": { "provider": "fs", "directory": "shelf-data" } }
+```
+
+```bash
+npm run sync -- --create
+npm run build && npm start -w @bookshelf/app
+```
+
+With Docker there is nothing to change: the image is already built for the
+filesystem, so `docker compose run --rm sync --create` and `docker compose up`
+are the whole of it.
 
 Titles, authors, publishers and years are real works long out of copyright, so
 a shelf of them looks like a shelf. The prose inside is placeholder — the point
