@@ -118,9 +118,6 @@ tests yet.
 
 ## Reporting a security issue
 
-Please don't open a public issue for anything exploitable. Use GitHub's private
-vulnerability reporting on this repository instead.
-
-One thing that is **not** a vulnerability: the app has no authentication. That
-is documented, deliberate for now, and tracked in
-[Not done yet](README.md#not-done-yet).
+Please don't open a public issue for anything exploitable — see
+[SECURITY.md](SECURITY.md), which explains where to send it and what does not
+count (the missing authentication, chiefly).
