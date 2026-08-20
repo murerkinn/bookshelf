@@ -8,28 +8,32 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same ref supersedes the run already in flight.
+# A newer push to the same pull request supersedes the run already in flight.
+# Runs on main are left alone: every commit there has landed, and its result is
+# worth keeping.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
-    name: Lint, build and types (Node ${{ matrix.node }})
+    name: Lint, build and types
     runs-on: ubuntu-latest
-    strategy:
-      # One version failing should not hide whether the other passes.
-      fail-fast: false
-      matrix:
-        # The floor declared in engines, and current. The floor is wrangler's,
-        # which asks for more than Next.js does.
-        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Fork pull requests run this workflow. Nothing here pushes, so the
+          # token has no reason to outlive the checkout step.
+          persist-credentials: false
 
+      # One version, the one engines declares. A matrix across Node versions
+      # would double this job to learn nothing: Biome is a Rust binary, and
+      # the typecheck reads a pinned @types/node, so neither can vary by
+      # runtime — and nothing here executes the project's own code. It belongs
+      # on a test job, once there is one.
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: npm
 
       # `npm ci` rather than `npm install`: it refuses to run when the
@@ -50,10 +54,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Fork pull requests run this workflow. Nothing here pushes, so the
+          # token has no reason to outlive the checkout step.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci

@@ -15,7 +15,7 @@
     "url": "https://github.com/murerkinn/bookshelf/issues"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "type": "module",
   "bin": {

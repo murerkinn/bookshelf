@@ -14,7 +14,7 @@ so the screenshots can be reproduced without finding books first.
 
 ## Getting started
 
-Node 22 or newer, and a Unix-like system: the sync tool finds its image tools
+Node 24 or newer, and a Unix-like system: the sync tool finds its image tools
 with `which`, so Windows is not supported.
 
 ```bash
@@ -531,7 +531,7 @@ costs a 304 rather than a re-download.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: Node 22, `npm
+See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: Node 24, `npm
 install`, `npm run lint` and `npm run check-types` before you push, and there
 are no tests yet — so say what you ran.
 

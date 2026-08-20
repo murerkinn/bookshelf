@@ -15,7 +15,7 @@
     "url": "https://github.com/murerkinn/bookshelf/issues"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "next dev",
@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
