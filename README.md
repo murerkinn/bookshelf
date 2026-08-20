@@ -1,5 +1,7 @@
 # Bookshelf
 
+[![CI](https://github.com/murerkinn/bookshelf/actions/workflows/ci.yml/badge.svg)](https://github.com/murerkinn/bookshelf/actions/workflows/ci.yml)
+
 A self-hosted library for the ebooks you already own. One server-rendered page
 lists them, filters them with a search box, serves downloads, and reads EPUBs
 in the browser — as a Cloudflare Worker over R2, or as a Node server over a
