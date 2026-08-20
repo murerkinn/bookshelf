@@ -2,6 +2,7 @@
   "name": "@bookshelf/provider-r2",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Cloudflare R2 provider: a Worker binding to read, the wrangler CLI to publish",
   "type": "module",
   "main": "./dist/index.js",

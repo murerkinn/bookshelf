@@ -2,6 +2,7 @@
   "name": "@bookshelf/provider-fs",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Filesystem provider: the library as a directory, read and managed from Node",
   "type": "module",
   "main": "./dist/index.js",

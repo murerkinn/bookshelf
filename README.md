@@ -377,3 +377,10 @@ costs a 304 rather than a re-download.
   whole library — and pick any profile while doing it. Profiles are a way to
   keep housemates' bookmarks apart, not a way to keep anyone out.
 - Two devices reading as one profile at the same time is last-write-wins.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+That covers the code. It says nothing about the books you put in a library
+built with it, whose copyright is between you and their publishers.

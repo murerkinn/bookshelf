@@ -2,6 +2,7 @@
   "name": "@bookshelf/core",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "The library format and the ZIP reader, shared by the app and the sync tool",
   "type": "module",
   "main": "./dist/index.js",

@@ -2,6 +2,7 @@
   "name": "@bookshelf/app",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "The bookshelf itself: a server-rendered library over object storage",
   "scripts": {
     "dev": "next dev",
