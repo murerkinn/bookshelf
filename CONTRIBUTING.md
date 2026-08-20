@@ -32,8 +32,14 @@ That is the honest state of it. Until there are, verify by running the thing:
 the filesystem quickstart in the README is the fastest way, and it exercises
 publishing, the shelf, the reader and reading positions in about a minute.
 
-If you are adding tests, the two most valuable are a **provider conformance
-suite** and an end-to-end run of that quickstart. Both would be very welcome.
+`test/` holds the pieces to build on: `test/lib/epub.mjs` generates valid
+EPUBs — real ZIP, real PNG cover, real Dublin Core metadata — with no network
+and byte-for-byte determinism, and `test/fixtures.mjs` builds a whole shelf out
+of them. `npm run demo` is that same code.
+
+So the two most valuable tests are now both unblocked: a **provider conformance
+suite**, and an end-to-end run of the quickstart against a generated library.
+Both would be very welcome.
 
 ## What lives where
 

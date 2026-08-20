@@ -88,6 +88,28 @@ The two must agree about which bucket holds the library, or the app will serve
 an empty shelf. They are checked against each other before anything uploads,
 and a mismatch is reported rather than published through.
 
+### A demo shelf
+
+No books to hand, or want a shelf worth screenshotting? There is a generated
+set of public-domain titles, and it downloads nothing:
+
+```bash
+npm run demo                 # writes 8 books into books/
+npm run sync -- --create     # or: docker compose run --rm sync --create
+```
+
+Titles, authors, publishers and years are real works long out of copyright, so
+a shelf of them looks like a shelf. The prose inside is placeholder — the point
+is to exercise the app, not to ship anyone's writing. One book deliberately has
+no cover, so the shelf's tinted initials tile shows up alongside real covers.
+
+`npm run demo -- somewhere/else` writes them elsewhere, and it refuses to add
+demo books to a directory that already holds some rather than mixing them into
+yours.
+
+The same generator is what test fixtures are built from — see
+`test/lib/epub.mjs`.
+
 ### Covers
 
 Skip this if you are using Docker — the image already has them.
