@@ -67,8 +67,7 @@ jobs:
       - run: npm ci
 
       # Catches what `next build` cannot: that the app still bundles for
-      # workerd, and that nothing Node-only has reached the Worker through a
-      # provider import. Bundling needs no Cloudflare credentials — only
-      # deploying does.
-      - run: npx opennextjs-cloudflare build
-        working-directory: apps/bookshelf
+      # workerd. Bundling needs no Cloudflare credentials — only deploying
+      # does. Through Turborepo rather than the CLI directly, so the packages
+      # the build imports are built first.
+      - run: npm run bundle

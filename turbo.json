@@ -9,7 +9,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".open-next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    // Bundling for workerd is a step past `next build`, and it shells out to
+    // `next build` itself — which loads next.config.ts, which imports
+    // @bookshelf/core. Running it through Turborepo is what gets that package
+    // built first; invoking the CLI directly does not.
+    "bundle": {
+      "dependsOn": ["^build"],
+      "outputs": [".open-next/**"]
     },
     "check-types": {
       // The package's own build, not just its dependencies': the app's route
