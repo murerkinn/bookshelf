@@ -5,10 +5,34 @@
   "license": "MIT",
   "packageManager": "npm@11.16.0",
   "description": "A self-hostable ebook library over object storage",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "keywords": [
+    "ebook",
+    "epub",
+    "library",
+    "self-hosted",
+    "cloudflare-workers",
+    "r2",
+    "calibre"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "@xmldom/xmldom": "^0.8.14"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
