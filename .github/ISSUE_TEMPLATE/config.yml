@@ -1,3 +1,12 @@
 # Blank issues stay enabled on purpose: the templates cover the common cases,
 # and a small project should not make someone fight a form to ask a question.
 blank_issues_enabled: true
+
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/murerkinn/bookshelf/security/advisories/new
+    about: Privately, so a fix can land before the details are public. Please
+      do not open a public issue for anything exploitable.
+  - name: Questions and ideas
+    url: https://github.com/murerkinn/bookshelf/discussions
+    about: For anything that is not a bug report or a specific request.
