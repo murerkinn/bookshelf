@@ -21,7 +21,35 @@ npm install
 Put some books — EPUB or PDF — in `books/`, then choose where the library
 should live.
 
-### On a machine you own
+### With Docker
+
+The shortest path, and the image brings its own `cwebp` and `pdftoppm` so
+covers come out right without installing anything on the host.
+
+```bash
+mkdir books && cp ~/Downloads/*.epub books/
+docker compose run --rm sync --create
+docker compose up -d
+```
+
+The shelf is then on <http://localhost:3000>. Flags pass through, so
+`docker compose run --rm sync --force` and `--dry-run` behave as they do
+locally.
+
+One named volume, `library`, holds the published books *and* everything the app
+writes to them — profiles and reading positions — so it is the only thing to
+back up.
+
+The image is built for the filesystem provider: it is a Node server, and
+Cloudflare needs no container. It runs as a non-root user, and creates `/data`
+owned by that user so a named volume inherits an ownership the app can write
+to. If you would rather bind-mount a host directory, chown it first:
+
+```bash
+chown -R 1000:1000 /srv/bookshelf
+```
+
+### On a machine you own, without Docker
 
 No account anywhere. Point `bookshelf.config.json` at a directory, publish into
 it, and run the app:
@@ -61,6 +89,8 @@ an empty shelf. They are checked against each other before anything uploads,
 and a mismatch is reported rather than published through.
 
 ### Covers
+
+Skip this if you are using Docker — the image already has them.
 
 Thumbnailing is done by external tools, and the sync tool degrades quietly
 without them — a shelf of untouched publisher covers costs around 65 MB against

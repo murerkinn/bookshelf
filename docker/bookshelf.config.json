@@ -1,0 +1,9 @@
+{
+  "input": "/books",
+  "output": "/library",
+  "coverHeight": 240,
+  "storage": {
+    "provider": "fs",
+    "directory": "/data/library"
+  }
+}

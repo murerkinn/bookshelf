@@ -1,0 +1,34 @@
+# A shelf on a machine you own: one container serving a directory, and a
+# one-shot container that publishes books into it.
+#
+#   mkdir books && cp ~/some-book.epub books/
+#   docker compose run --rm sync --create
+#   docker compose up -d
+#
+# Then http://localhost:3000. There is no authentication — see the README
+# before putting this anywhere public.
+
+services:
+  app:
+    build: .
+    image: bookshelf
+    ports:
+      - "3000:3000"
+    volumes:
+      - library:/data
+    restart: unless-stopped
+
+  # Not started by `up`: it runs, publishes, and exits.
+  sync:
+    build: .
+    image: bookshelf
+    profiles: [sync]
+    # Arguments after `docker compose run --rm sync` are appended here, so
+    # `--create`, `--force` and `--dry-run` all work as they do locally.
+    entrypoint: ["node", "packages/sync/sync.mjs"]
+    volumes:
+      - ./books:/books:ro
+      - library:/data
+
+volumes:
+  library:

@@ -1,0 +1,23 @@
+# The build context is sent to the daemon in full, so keeping books out of it
+# is the difference between a megabyte and a few hundred.
+books/
+library/
+shelf-data/
+
+node_modules
+**/node_modules
+.next
+**/.next
+.open-next
+**/.open-next
+.turbo
+**/.turbo
+packages/*/dist
+**/*.tsbuildinfo
+
+.git
+.github
+.gitignore
+.nvmrc
+*.md
+!README.md
