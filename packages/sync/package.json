@@ -4,6 +4,19 @@
   "private": true,
   "license": "MIT",
   "description": "Builds a library from a folder of books and publishes it to object storage",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "packages/sync"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "bin": {
     "bookshelf-sync": "./sync.mjs"

@@ -4,6 +4,19 @@
   "private": true,
   "license": "MIT",
   "description": "Filesystem provider: the library as a directory, read and managed from Node",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "packages/provider-fs"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

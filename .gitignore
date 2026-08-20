@@ -53,3 +53,6 @@ next-env.d.ts
 # the sync tool's directories, as configured in bookshelf.config.json
 /books/
 /library/
+
+# where the filesystem provider publishes to, in the documented setup
+/shelf-data/

@@ -5,6 +5,79 @@ lists them, filters them with a search box, serves downloads, and reads EPUBs
 in the browser — as a Cloudflare Worker over R2, or as a Node server over a
 directory on disk.
 
+## Getting started
+
+Node 22 or newer, and a Unix-like system: the sync tool finds its image tools
+with `which`, so Windows is not supported.
+
+```bash
+git clone https://github.com/murerkinn/bookshelf.git
+cd bookshelf
+npm install
+```
+
+Put some books — EPUB or PDF — in `books/`, then choose where the library
+should live.
+
+### On a machine you own
+
+No account anywhere. Point `bookshelf.config.json` at a directory, publish into
+it, and run the app:
+
+```jsonc
+// bookshelf.config.json
+{ "storage": { "provider": "fs", "directory": "shelf-data" } }
+```
+
+```bash
+npm run sync -- --create   # builds library/, then publishes it to shelf-data/
+npm run build
+npm start -w @bookshelf/app
+```
+
+`library/` is the tree the sync tool builds; `directory` is where it publishes
+to, and it holds the books being served. Keep it out of the repository —
+`shelf-data/` already is.
+
+### On Cloudflare
+
+Needs a Cloudflare account and `npx wrangler login`. Two files carry this
+project's own deployment and are meant to be edited:
+
+| file | change |
+| --- | --- |
+| `bookshelf.config.json` | `storage.bucket`, and `storage.jurisdiction` — delete that key unless you want EU data residency |
+| `apps/bookshelf/wrangler.jsonc` | `name`, and the `r2_buckets` entry to match the above |
+
+```bash
+npm run sync -- --create   # creates the bucket, then uploads to it
+npm run deploy
+```
+
+The two must agree about which bucket holds the library, or the app will serve
+an empty shelf. They are checked against each other before anything uploads,
+and a mismatch is reported rather than published through.
+
+### Covers
+
+Thumbnailing is done by external tools, and the sync tool degrades quietly
+without them — a shelf of untouched publisher covers costs around 65 MB against
+0.5 MB thumbnailed.
+
+| tool | for | absent |
+| --- | --- | --- |
+| `cwebp` (libwebp) | cover thumbnails | `sips` on macOS, otherwise covers are published full size |
+| `pdftoppm` (poppler) | covers out of PDFs | `sips` or `qlmanage` on macOS, otherwise PDFs get no cover |
+
+```bash
+brew install webp poppler        # macOS
+apt install webp poppler-utils   # Debian, Ubuntu
+```
+
+**There is no authentication.** Anyone who can reach the app can read and
+download the whole library, so put it on a network you trust or behind
+something that asks who is calling. See [Not done yet](#not-done-yet).
+
 ## The repository
 
 ```
