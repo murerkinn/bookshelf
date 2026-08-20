@@ -1,6 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
+  // Which provider the library lives on is read out of this file at build
+  // time, so it belongs in every task's cache key. Without it, changing the
+  // provider and rebuilding replays the previous build — an artifact for the
+  // wrong provider, and nothing says so.
+  "globalDependencies": ["bookshelf.config.json", "bookshelf.config.jsonc"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
