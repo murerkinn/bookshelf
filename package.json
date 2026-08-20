@@ -37,6 +37,7 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "check-types": "turbo run check-types",
+    "bundle": "turbo run bundle",
     "sync": "turbo run sync --log-prefix=none --output-logs=new-only --",
     "demo": "node test/fixtures.mjs",
     "deploy": "turbo run deploy --log-prefix=none --",
