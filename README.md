@@ -7,6 +7,11 @@ lists them, filters them with a search box, serves downloads, and reads EPUBs
 in the browser — as a Cloudflare Worker over R2, or as a Node server over a
 directory on disk.
 
+![The shelf: a searchable list of books with covers, a profile switcher, and a Continue button on the book being read](docs/shelf.webp)
+
+Everything above is `npm run demo` — a generated shelf of public-domain titles,
+so the screenshots can be reproduced without finding books first.
+
 ## Getting started
 
 Node 22 or newer, and a Unix-like system: the sync tool finds its image tools
@@ -423,6 +428,8 @@ says so on startup. A Worker with no `BOOKS` binding, and a filesystem build
 with no directory, both fail outright with what to do about it.
 
 ## Reading in the browser
+
+![The reader: a two-page spread of a chapter, with a contents dropdown and a layout selector](docs/reader.webp)
 
 Every book has a **Read** link. PDFs go straight to the browser's own viewer,
 served with an inline disposition rather than as a download.

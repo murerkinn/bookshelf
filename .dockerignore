@@ -17,6 +17,7 @@ packages/*/dist
 
 .git
 .github
+docs/
 .gitignore
 .nvmrc
 *.md
