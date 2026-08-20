@@ -1,0 +1,68 @@
+name: Book imported wrongly
+description: A book has the wrong metadata, no cover, or will not open
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Metadata and covers are read out of each book's own package document,
+        so when one book is wrong it is usually that book's markup rather than
+        the library. These questions are the ones that tell them apart.
+
+        **Please do not attach the book itself** — it is almost certainly
+        copyrighted. The metadata block below is enough.
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What is wrong
+      options:
+        - The title, author or publisher is wrong or missing
+        - There is no cover, or the wrong image is used
+        - It will not open in the reader
+        - The download is broken or truncated
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      options: [EPUB, PDF, Both]
+    validations:
+      required: true
+
+  - type: textarea
+    id: sync_output
+    attributes:
+      label: What the sync tool said about it
+      description: >
+        The line for this book from `npm run sync`, including any `skip` or
+        `fail` and its reason.
+      render: text
+
+  - type: textarea
+    id: metadata
+    attributes:
+      label: The book's own metadata
+      description: >
+        For an EPUB, the `<metadata>` section of its `.opf` — that is exactly
+        what the sync tool reads. Unzip the book, find the `.opf` named in
+        `META-INF/container.xml`, and paste the block. Skip this for a PDF.
+      render: xml
+
+  - type: input
+    id: elsewhere
+    attributes:
+      label: Does another reader show it correctly?
+      description: Calibre, Apple Books, whatever you have.
+      placeholder: e.g. Calibre shows the right title, so it is not the file
+
+  - type: input
+    id: others
+    attributes:
+      label: Do other books import correctly?
+      placeholder: e.g. yes, 40 others are fine — only this one
+    validations:
+      required: true

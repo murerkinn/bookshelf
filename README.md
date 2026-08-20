@@ -453,6 +453,15 @@ costs a 304 rather than a re-download.
   keep housemates' bookmarks apart, not a way to keep anyone out.
 - Two devices reading as one profile at the same time is last-write-wins.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: Node 22, `npm
+install`, `npm run lint` and `npm run check-types` before you push, and there
+are no tests yet — so say what you ran.
+
+Storage providers are the extension point and do not have to live here: a
+package published by anyone can be installed and named in the config.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

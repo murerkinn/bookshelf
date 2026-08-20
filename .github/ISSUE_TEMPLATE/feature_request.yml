@@ -1,0 +1,29 @@
+name: Idea or feature request
+description: Something this should do and does not
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        The situation rather than the solution. It is easier to find a good
+        answer from the problem than from a proposed feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you had in mind
+      description: If you have a shape in mind. Skip it if you do not.
+
+  - type: markdown
+    attributes:
+      value: |
+        **A new storage backend does not need to be requested.** Providers are
+        packages resolved by name, so anyone can publish one and point
+        `bookshelf.config.json` at it — see
+        [Adding a storage provider](https://github.com/murerkinn/bookshelf/blob/main/CONTRIBUTING.md#adding-a-storage-provider).
+        Open an issue if the *contract* gets in the way of writing one; that is
+        the part worth changing.

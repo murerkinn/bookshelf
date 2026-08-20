@@ -1,0 +1,73 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a specific book imported wrongly — missing cover, wrong title, will
+        not open — use the **Book imported wrongly** template instead. It asks
+        for the things that actually narrow that down.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. npm run sync -- --create
+        2. npm start -w @bookshelf/app
+        3. Open the shelf and …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Storage provider
+      options:
+        - r2 (Cloudflare R2)
+        - fs (a directory on disk)
+        - something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it happened
+      description: >
+        The app and the sync tool run in different runtimes, and most bugs
+        belong to one of them.
+      options:
+        - The app, deployed to Cloudflare Workers
+        - The app, running on Node (npm start)
+        - The app, in development (npm run dev)
+        - The sync tool (npm run sync)
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Node version and OS
+      placeholder: node -v, and macOS 15 / Ubuntu 24.04 / …
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: >
+        Any error, and the surrounding lines. From the terminal for the sync
+        tool or a Node server, or from `npx wrangler tail` for a deployed
+        Worker.
+      render: text

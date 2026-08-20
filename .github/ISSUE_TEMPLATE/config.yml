@@ -1,0 +1,3 @@
+# Blank issues stay enabled on purpose: the templates cover the common cases,
+# and a small project should not make someone fight a form to ask a question.
+blank_issues_enabled: true
