@@ -116,6 +116,10 @@ Say what you verified and how. "Ran the filesystem quickstart, opened a book,
 switched profiles" is worth more than a green checkmark, given there are no
 tests yet.
 
+`main` takes changes through pull requests only, and all three CI jobs have to
+pass before one can merge. Merges are squashed, so the branch can have as many
+commits as it needs — write the final message on the pull request.
+
 ## Reporting a security issue
 
 Please don't open a public issue for anything exploitable — see
