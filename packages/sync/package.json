@@ -2,6 +2,7 @@
   "name": "@bookshelf/sync",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Builds a library from a folder of books and publishes it to object storage",
   "type": "module",
   "bin": {
