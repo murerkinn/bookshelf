@@ -105,6 +105,23 @@ works long out of copyright so a shelf of them looks like a shelf; the prose
 inside is placeholder. Note that the config in this repository points at R2, so
 `npm run sync` goes there unless you change it.
 
+### A public instance
+
+Anything reachable by strangers should refuse to be changed:
+
+```bash
+BOOKSHELF_READ_ONLY=1
+```
+
+Storage keeps serving and stops accepting. Profiles cannot be added, renamed or
+deleted, and reading positions go back to living in the browser — the same
+degradation as a provider that cannot write, because to the app it is the same
+situation. Switching between existing profiles still works; that is a cookie,
+not a change.
+
+It is enforced where the writing happens, not by hiding the forms, so posting
+the actions directly gets the same refusal.
+
 **There is no authentication.** Anyone who can reach the app can read and
 download the whole library, so put it on a network you trust or behind
 something that asks who is calling. See [Not done yet](#not-done-yet).

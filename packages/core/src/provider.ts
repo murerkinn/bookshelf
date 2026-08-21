@@ -171,6 +171,25 @@ export function capabilitiesOf(admin: StorageAdmin): ProviderCapabilities {
   };
 }
 
+/**
+ * The same storage with the write path taken off.
+ *
+ * Deliberately a wrapper that does not carry `write` or `remove` at all,
+ * rather than ones that throw: {@link writableStorage} decides by asking
+ * whether the methods are there, so everything downstream already knows how
+ * to behave against storage it cannot write to. A deployment that refuses
+ * edits and a provider that cannot make them are the same situation, and the
+ * app should not need to tell them apart.
+ */
+export function readOnlyStorage(storage: Storage): Storage {
+  return {
+    head: (key) => storage.head(key),
+    read: (key, options) => storage.read(key, options),
+    readBytes: (key) => storage.readBytes(key),
+    readRange: (key, offset, length) => storage.readRange(key, offset, length),
+  };
+}
+
 /** One key a provider accepts under `storage` in bookshelf.config.json. */
 export type ProviderOption = {
   key: string;
