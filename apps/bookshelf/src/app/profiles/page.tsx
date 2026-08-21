@@ -1,3 +1,4 @@
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/app/avatar";
 import {
@@ -6,13 +7,9 @@ import {
   renameProfile,
   switchProfile,
 } from "@/app/profiles/actions";
+import { BUTTON, INPUT } from "@/app/ui";
 import { getServices } from "@/services/container";
 import { activeProfile } from "@/services/session";
-
-const BUTTON =
-  "rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10";
-const INPUT =
-  "min-w-0 rounded-lg border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/15";
 
 export default async function ProfilesPage(props: PageProps<"/profiles">) {
   const { error } = await props.searchParams;
@@ -24,31 +21,32 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
       <Link
         href="/"
-        className="text-sm font-medium text-zinc-500 hover:text-inherit"
+        className="inline-flex items-center gap-0.5 text-sm font-medium text-secondary transition-colors hover:text-foreground"
       >
-        ← Shelf
+        <ChevronLeft aria-hidden="true" className="size-4" />
+        Shelf
       </Link>
 
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">Profiles</h1>
-      <p className="mt-2 text-zinc-500">
+      <p className="mt-2 text-secondary">
         Everyone reading from this library keeps their own place in each book.
       </p>
 
       {typeof error === "string" && (
-        <p className="mt-6 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+        <p className="mt-6 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </p>
       )}
 
       {!writable && (
-        <p className="mt-6 rounded-lg border border-black/10 px-4 py-3 text-sm text-zinc-500 dark:border-white/15">
+        <p className="mt-6 rounded-xl bg-fill px-4 py-3 text-sm text-secondary">
           This library is read-only, so profiles cannot be added or changed.
           Reading positions are kept in this browser instead of being shared
           between your devices.
         </p>
       )}
 
-      <ul className="mt-10 divide-y divide-black/10 dark:divide-white/10">
+      <ul className="mt-10 divide-y divide-separator">
         {all.map((profile) => {
           const active = profile.id === current.id;
 
@@ -69,7 +67,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
                       defaultValue={profile.name}
                       aria-label={`Name for ${profile.name}`}
                       maxLength={40}
-                      className={`${INPUT} w-full max-w-56`}
+                      className={`${INPUT} w-full max-w-56 min-w-0`}
                     />
                     <button type="submit" className={BUTTON}>
                       Save
@@ -81,7 +79,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
               </div>
 
               {active ? (
-                <span className="shrink-0 text-sm text-zinc-500">
+                <span className="shrink-0 text-sm text-secondary">
                   Reading as this
                 </span>
               ) : (
@@ -100,7 +98,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
                   <input type="hidden" name="from" value="/profiles" />
                   <button
                     type="submit"
-                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-black/5 hover:text-red-600 dark:hover:bg-white/10 dark:hover:text-red-400"
+                    className="rounded-full px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
                   >
                     Delete
                   </button>
@@ -120,7 +118,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
             aria-label="New profile name"
             maxLength={40}
             required
-            className={`${INPUT} w-full max-w-56`}
+            className={`${INPUT} w-full max-w-56 min-w-0`}
           />
           <button type="submit" className={BUTTON}>
             Add profile
@@ -129,7 +127,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
       )}
 
       {writable && (
-        <p className="mt-3 text-sm text-zinc-500">
+        <p className="mt-3 text-sm text-secondary">
           Adding a profile starts reading as it.
         </p>
       )}

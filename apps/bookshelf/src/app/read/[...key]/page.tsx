@@ -1,3 +1,4 @@
+import { ArrowDownToLine, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EpubReader } from "@/app/read/[...key]/epub-reader";
@@ -22,19 +23,21 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-black/10 px-6 py-3 dark:border-white/10">
+      <header className="flex items-center justify-between gap-4 border-b border-separator px-6 py-3">
         <Link
           href="/"
-          className="shrink-0 text-sm font-medium text-zinc-500 hover:text-inherit"
+          className="inline-flex shrink-0 items-center gap-0.5 text-sm font-medium text-secondary transition-colors hover:text-foreground"
         >
-          ← Shelf
+          <ChevronLeft aria-hidden="true" className="size-4" />
+          Shelf
         </Link>
         <h1 className="min-w-0 truncate text-sm font-medium">{book.title}</h1>
         <a
           href={`/download/${encodeKey(fileKey)}`}
           download
-          className="shrink-0 text-sm font-medium text-zinc-500 hover:text-inherit"
+          className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-secondary transition-colors hover:text-foreground"
         >
+          <ArrowDownToLine aria-hidden="true" className="size-4" />
           Download
         </a>
       </header>

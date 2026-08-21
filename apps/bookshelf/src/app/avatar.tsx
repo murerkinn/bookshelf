@@ -1,4 +1,4 @@
-import { placeholder } from "@/lib/media";
+import { placeholder, tint } from "@/lib/media";
 
 /**
  * A profile's tile, tinted from its name. The same trick the shelf uses for
@@ -16,7 +16,7 @@ export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
         width: size,
         height: size,
         fontSize: size / 2.8,
-        backgroundImage: `linear-gradient(hsl(${hue} 42% 58%), hsl(${(hue + 40) % 360} 44% 38%))`,
+        backgroundImage: tint(hue),
       }}
     >
       {initials}

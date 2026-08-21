@@ -2,6 +2,7 @@
 
 import type { BookProgress } from "@bookshelf/core";
 import type { Book, NavItem, Rendition } from "epubjs";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Mode = "single" | "double" | "scroll";
@@ -370,29 +371,29 @@ export function EpubReader({
         {status !== "ready" && (
           <div className="absolute inset-0 flex items-center justify-center">
             {status === "error" ? (
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-secondary">
                 This book could not be opened.
               </p>
             ) : (
               <div className="w-full max-w-md animate-pulse space-y-3 px-6">
-                <div className="h-3 w-2/3 rounded bg-black/10 dark:bg-white/10" />
-                <div className="h-3 rounded bg-black/10 dark:bg-white/10" />
-                <div className="h-3 rounded bg-black/10 dark:bg-white/10" />
-                <div className="h-3 w-5/6 rounded bg-black/10 dark:bg-white/10" />
+                <div className="h-3 w-2/3 rounded bg-fill" />
+                <div className="h-3 rounded bg-fill" />
+                <div className="h-3 rounded bg-fill" />
+                <div className="h-3 w-5/6 rounded bg-fill" />
               </div>
             )}
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-black/10 px-6 py-3 dark:border-white/10">
+      <div className="flex items-center justify-between gap-3 border-t border-separator px-6 py-3">
         <button
           type="button"
           onClick={() => turn("prev")}
           aria-label="Previous page"
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+          className="rounded-full bg-fill p-2 transition-colors hover:bg-fill-hover"
         >
-          ←
+          <ChevronLeft aria-hidden="true" className="size-4" />
         </button>
 
         {toc.length > 0 ? (
@@ -404,7 +405,7 @@ export function EpubReader({
                 rendition.current?.display(event.target.value);
               }
             }}
-            className="min-w-0 flex-1 truncate rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/15"
+            className="min-w-0 flex-1 truncate rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-colors hover:bg-fill-hover"
           >
             <option value="">{label || "Contents"}</option>
             {toc.map(({ item, depth }) => (
@@ -414,14 +415,16 @@ export function EpubReader({
             ))}
           </select>
         ) : (
-          <span className="flex-1 truncate text-sm text-zinc-500">{label}</span>
+          <span className="flex-1 truncate text-sm text-secondary">
+            {label}
+          </span>
         )}
 
         <select
           aria-label="Reading layout"
           value={mode}
           onChange={(event) => changeMode(event.target.value as Mode)}
-          className="shrink-0 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/15"
+          className="shrink-0 rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-colors hover:bg-fill-hover"
         >
           {MODES.map((option) => (
             <option key={option.value} value={option.value}>
@@ -434,9 +437,9 @@ export function EpubReader({
           type="button"
           onClick={() => turn("next")}
           aria-label="Next page"
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+          className="rounded-full bg-fill p-2 transition-colors hover:bg-fill-hover"
         >
-          →
+          <ChevronRight aria-hidden="true" className="size-4" />
         </button>
       </div>
     </div>
