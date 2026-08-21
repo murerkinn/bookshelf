@@ -1,5 +1,6 @@
 "use client";
 
+import { LoaderCircle, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
@@ -36,6 +37,10 @@ export function SearchInput({ query }: { query: string }) {
     <search className="mt-8 block">
       <form onSubmit={(event) => event.preventDefault()}>
         <div className="relative">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-3.5 my-auto size-4 text-tertiary"
+          />
           <input
             type="search"
             name="q"
@@ -44,14 +49,15 @@ export function SearchInput({ query }: { query: string }) {
             placeholder="Search books…"
             aria-label="Search books"
             autoComplete="off"
-            className="w-full rounded-lg border border-black/10 bg-white px-4 py-2.5 outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-white/15 dark:bg-white/5 dark:focus:border-zinc-500"
+            className="w-full rounded-xl bg-fill py-2.5 pr-10 pl-10 outline-none transition-shadow placeholder:text-tertiary focus:ring-2 focus:ring-accent"
           />
           <output
-            className={`pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-zinc-400 transition-opacity ${
+            className={`pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-tertiary transition-opacity ${
               isPending ? "opacity-100" : "opacity-0"
             }`}
           >
-            Searching…
+            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+            <span className="sr-only">Searching…</span>
           </output>
         </div>
       </form>

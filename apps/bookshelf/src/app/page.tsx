@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { ProfileMenu } from "@/app/profile-menu";
 import { SearchInput } from "@/app/search-input";
-import { placeholder } from "@/lib/media";
+import { BUTTON_PRIMARY, BUTTON_QUIET } from "@/app/ui";
+import { placeholder, tint } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
 import { activeProfile } from "@/services/session";
 
-const COVER_CLASS =
-  "h-15 w-10 shrink-0 rounded shadow-sm ring-1 ring-black/10 dark:ring-white/10";
+const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
 
 function encodeKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -49,7 +49,7 @@ function Cover({ book }: { book: Book }) {
       aria-hidden="true"
       className={`${COVER_CLASS} flex items-center justify-center text-sm font-semibold text-white/90`}
       style={{
-        backgroundImage: `linear-gradient(hsl(${hue} 42% 58%), hsl(${(hue + 40) % 360} 44% 38%))`,
+        backgroundImage: tint(hue),
       }}
     >
       {initials}
@@ -88,13 +88,13 @@ export default async function Home(props: PageProps<"/">) {
       <SearchInput query={query} />
 
       {books.length === 0 ? (
-        <p className="mt-10 text-zinc-500">
+        <p className="mt-10 text-secondary">
           {empty
             ? "No catalog published yet. Run the publish script and upload its output."
             : `No books match “${query}”.`}
         </p>
       ) : (
-        <ul className="mt-10 divide-y divide-black/10 dark:divide-white/10">
+        <ul className="mt-10 divide-y divide-separator">
           {books.map((book) => {
             const readable = readableFormat(book);
 
@@ -107,10 +107,10 @@ export default async function Home(props: PageProps<"/">) {
                   <Cover book={book} />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{book.title}</p>
-                    <p className="mt-1 truncate text-sm text-zinc-500">
+                    <p className="mt-1 truncate text-sm text-secondary">
                       {book.authors.join(", ")}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-zinc-400">
+                    <p className="mt-0.5 truncate text-xs text-tertiary">
                       {[
                         book.published?.slice(0, 4),
                         book.publisher,
@@ -131,7 +131,7 @@ export default async function Home(props: PageProps<"/">) {
                   {readable && (
                     <Link
                       href={`/read/${encodeKey(bookKey(book.id, readable.file))}`}
-                      className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                      className={BUTTON_PRIMARY}
                     >
                       {positions[book.id] ? "Continue" : "Read"}
                     </Link>
@@ -141,7 +141,7 @@ export default async function Home(props: PageProps<"/">) {
                       key={format.file}
                       href={`/download/${encodeKey(bookKey(book.id, format.file))}`}
                       download
-                      className="rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-black/5 hover:text-inherit dark:hover:bg-white/10"
+                      className={BUTTON_QUIET}
                     >
                       {format.format.toUpperCase()}
                     </a>
