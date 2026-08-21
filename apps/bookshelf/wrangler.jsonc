@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "minify": true,
   "keep_vars": true,
-  "workers_dev": true,
+  "workers_dev": false,
   "preview_urls": false,
   "assets": {
     "directory": ".open-next/assets",
