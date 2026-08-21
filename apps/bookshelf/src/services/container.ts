@@ -1,4 +1,4 @@
-import type { Storage } from "@bookshelf/core";
+import { readOnlyStorage, type Storage } from "@bookshelf/core";
 import {
   openWorkersCache,
   WorkersCache,
@@ -50,6 +50,28 @@ export function setServices(services: Services | null): void {
 }
 
 /**
+ * Whether this deployment refuses to change anything.
+ *
+ * A property of the instance rather than of the library, so it comes from the
+ * environment and not from bookshelf.config.json: the same build serves a
+ * public demo that must not be edited and a private shelf that must be. The
+ * only thing it does is take the write path off storage, which every service
+ * already knows how to cope with — profiles stop offering to change anything
+ * and reading positions go back to living in the browser.
+ */
+function refusesEdits(): boolean {
+  const value = (process.env.BOOKSHELF_READ_ONLY ?? "").trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
+function compose(storage: Storage, cache: ResponseCache): Services {
+  return createServices(
+    refusesEdits() ? readOnlyStorage(storage) : storage,
+    cache,
+  );
+}
+
+/**
  * The library on a filesystem, for running the app on a machine that has one —
  * your own, or a VPS. There is no Workers cache here, and none is needed: the
  * catalog memo still spares the repeated reads, and the files are local.
@@ -67,7 +89,7 @@ async function filesystemServices(): Promise<Services> {
   }
 
   const { createStorage } = await import("@bookshelf/provider-fs/node");
-  return createServices(createStorage({ directory }), new NoopCache());
+  return compose(createStorage({ directory }), new NoopCache());
 }
 
 /** Said once per process, not once per request. */
@@ -118,7 +140,7 @@ async function cloudflareServices(): Promise<Services> {
     );
   }
 
-  return createServices(
+  return compose(
     createStorage(env.BOOKS),
     // Absent under `next dev`, which runs in Node rather than workerd.
     cache

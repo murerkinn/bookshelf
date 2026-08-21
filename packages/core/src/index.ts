@@ -21,7 +21,11 @@ export type {
   StoredObject,
   WritableStorage,
 } from "./provider.js";
-export { capabilitiesOf, writableStorage } from "./provider.js";
+export {
+  capabilitiesOf,
+  readOnlyStorage,
+  writableStorage,
+} from "./provider.js";
 export type {
   BookProgress,
   Profile,
