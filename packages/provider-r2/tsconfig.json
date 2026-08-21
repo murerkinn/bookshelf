@@ -10,6 +10,11 @@
     "sourceMap": true,
     "incremental": true,
     "skipLibCheck": true,
+    // TypeScript 7 does not pick up @types/* hoisted to the workspace root the
+    // way 5 did, so the ambient types this package needs are named rather than
+    // discovered. Getting it wrong is a compile error, not a silent loss of
+    // checking.
+    "types": ["node"],
     "outDir": "dist",
     "rootDir": "src"
   },
