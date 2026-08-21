@@ -156,6 +156,7 @@ editing `wrangler.jsonc`.
 | [Profiles](docs/profiles.md) | who is reading, and where they got to |
 | [Reading in the browser](docs/reader.md) | how a chapter reaches the page |
 | [Architecture](docs/architecture.md) | ports, adapters, and the composition root |
+| [The demo library](docs/demo.md) | how the public shelf is built, and how to rebuild it |
 
 ## Not done yet
 
