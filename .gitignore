@@ -56,3 +56,8 @@ next-env.d.ts
 
 # where the filesystem provider publishes to, in the documented setup
 /shelf-data/
+
+# the demo library: books fetched from Project Gutenberg, and the tree built
+# from them. Both are reproducible, so neither is checked in.
+/gutenberg/
+/demo-library/
