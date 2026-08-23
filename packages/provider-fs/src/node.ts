@@ -68,13 +68,36 @@ function describe(key: string, stats: Stats): StoredObject {
   };
 }
 
+/**
+ * Whether a failure means the object is not there, as opposed to not readable.
+ *
+ * The distinction is the provider's to make, because it is the only thing here
+ * that knows what `EACCES` means. Reporting an unreadable file as an absent one
+ * would have the app say a library is empty when it is a permissions problem, or
+ * a chapter is missing when the disk is failing — and the app's whole answer to
+ * an unreachable library depends on being told that is what happened.
+ */
+function missing(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return (
+    code === "ENOENT" ||
+    // A path component that is not a directory, a name no filesystem could
+    // hold, or a directory where an object was expected: all of them are
+    // "there is no such object", not "it could not be read".
+    code === "ENOTDIR" ||
+    code === "ENAMETOOLONG" ||
+    code === "EISDIR"
+  );
+}
+
 /** Stats for a key, or null when it is missing or is not a file. */
 async function statFile(file: string): Promise<Stats | null> {
   try {
     const stats = await stat(file);
     return stats.isFile() ? stats : null;
-  } catch {
-    return null;
+  } catch (error) {
+    if (missing(error)) return null;
+    throw error;
   }
 }
 
@@ -142,8 +165,9 @@ class FsStorage implements WritableStorage {
           buffer.byteOffset + buffer.byteLength,
         ),
       );
-    } catch {
-      return null;
+    } catch (error) {
+      if (missing(error)) return null;
+      throw error;
     }
   }
 
@@ -224,10 +248,13 @@ async function walk(root: string): Promise<string[]> {
         .filter((key) => !isStateKey(key))
         .sort()
     );
-  } catch {
+  } catch (error) {
     // A destination that does not exist yet holds nothing, which is not an
-    // error — the first publish creates it.
-    return [];
+    // error — the first publish creates it. One that cannot be read is a
+    // different matter: answering "empty" would have the sync tool report a
+    // destination it never managed to look at.
+    if (missing(error)) return [];
+    throw error;
   }
 }
 
@@ -279,8 +306,9 @@ export function createAdmin(config: Config): StorageAdmin {
     async read(key) {
       try {
         return await readFile(pathFor(key));
-      } catch {
-        return null;
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
       }
     },
 
