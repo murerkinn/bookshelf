@@ -8,10 +8,13 @@ import type { ResponseCache } from "@/services/ports/cache";
  * and a named cache keeps these entries out of the CDN's own namespace anyway.
  */
 export class WorkersCache implements ResponseCache {
-  constructor(
-    private readonly cache: Cache,
-    private readonly waitUntil: (work: Promise<unknown>) => void,
-  ) {}
+  private readonly cache: Cache;
+  private readonly waitUntil: (work: Promise<unknown>) => void;
+
+  constructor(cache: Cache, waitUntil: (work: Promise<unknown>) => void) {
+    this.cache = cache;
+    this.waitUntil = waitUntil;
+  }
 
   async match(key: string): Promise<Response | undefined> {
     return this.cache.match(key);

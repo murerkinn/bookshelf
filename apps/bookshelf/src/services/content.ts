@@ -30,10 +30,13 @@ function remember(key: string, directory: ZipDirectory): void {
 
 /** Reads the files inside a book's archive, one at a time. */
 export class BookContentService {
-  constructor(
-    private readonly storage: Storage,
-    private readonly cache: ResponseCache,
-  ) {}
+  private readonly storage: Storage;
+  private readonly cache: ResponseCache;
+
+  constructor(storage: Storage, cache: ResponseCache) {
+    this.storage = storage;
+    this.cache = cache;
+  }
 
   /**
    * The archive as bytes the ZIP reader can range over. Its size is looked up

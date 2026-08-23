@@ -22,7 +22,11 @@ export type { BookProgress } from "@bookshelf/core";
  * reader that loses gets the other's position on its next load.
  */
 export class ProgressService {
-  constructor(private readonly storage: Storage) {}
+  private readonly storage: Storage;
+
+  constructor(storage: Storage) {
+    this.storage = storage;
+  }
 
   get writable(): boolean {
     return writableStorage(this.storage) !== null;

@@ -37,10 +37,13 @@ export function resetCatalogMemo(): void {
 }
 
 export class CatalogService {
-  constructor(
-    private readonly storage: Storage,
-    private readonly cache: ResponseCache,
-  ) {}
+  private readonly storage: Storage;
+  private readonly cache: ResponseCache;
+
+  constructor(storage: Storage, cache: ResponseCache) {
+    this.storage = storage;
+    this.cache = cache;
+  }
 
   async all(): Promise<Book[]> {
     const now = Date.now();

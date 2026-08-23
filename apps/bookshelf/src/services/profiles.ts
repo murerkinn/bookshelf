@@ -72,7 +72,11 @@ export function cleanName(value: unknown): string {
  * state it may never need, and a read-only library still works.
  */
 export class ProfileService {
-  constructor(private readonly storage: Storage) {}
+  private readonly storage: Storage;
+
+  constructor(storage: Storage) {
+    this.storage = storage;
+  }
 
   /** Whether profiles can be changed at all, which the UI asks before offering. */
   get writable(): boolean {
