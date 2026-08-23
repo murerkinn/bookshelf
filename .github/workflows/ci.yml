@@ -29,8 +29,8 @@ jobs:
       # One version, the one engines declares. A matrix across Node versions
       # would double this job to learn nothing: Biome is a Rust binary, and
       # the typecheck reads a pinned @types/node, so neither can vary by
-      # runtime — and nothing here executes the project's own code. It belongs
-      # on a test job, once there is one.
+      # runtime — and nothing here executes the project's own code. That is
+      # what the `test` job below does, and where a matrix would belong.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -71,3 +71,31 @@ jobs:
       # does. Through Turborepo rather than the CLI directly, so the packages
       # the build imports are built first.
       - run: npm run bundle
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Fork pull requests run this workflow. Nothing here pushes, so the
+          # token has no reason to outlive the checkout step.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # `turbo run test` rather than `npm test`, because the tests import the
+      # packages from their built output and Turborepo is what builds those
+      # first. Running the script directly against a cold checkout would fail
+      # on a missing `dist`.
+      #
+      # The fixtures are generated, so nothing here reaches the network or
+      # needs a book to hand — and nothing needs `cwebp` or `pdftoppm` either,
+      # since the one part of the pipeline that shells out to them is the one
+      # part these tests leave alone.
+      - run: npx turbo run test
