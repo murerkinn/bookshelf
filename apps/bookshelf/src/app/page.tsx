@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ProfileMenu } from "@/app/profile-menu";
 import { SearchInput } from "@/app/search-input";
@@ -6,6 +7,15 @@ import { placeholder, tint } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
 import { activeProfile } from "@/services/session";
+
+/**
+ * Searching filters through `?q=`, and every one of those is the same shelf
+ * seen through a slot. The canonical points at the whole thing so a search
+ * someone happened to share is not indexed as a page of its own.
+ */
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
 

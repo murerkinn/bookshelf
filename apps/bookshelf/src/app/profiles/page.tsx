@@ -1,4 +1,5 @@
 import { ChevronLeft } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Avatar } from "@/app/avatar";
 import {
@@ -8,8 +9,22 @@ import {
   switchProfile,
 } from "@/app/profiles/actions";
 import { BUTTON, INPUT } from "@/app/ui";
+import { OG_BASE, SITE_DESCRIPTION } from "@/lib/site";
 import { getServices } from "@/services/container";
 import { activeProfile } from "@/services/session";
+
+/** Someone's household, which is nobody else's business to index. */
+export const metadata: Metadata = {
+  title: "Profiles",
+  robots: { index: false, follow: false },
+  openGraph: { ...OG_BASE, title: "Profiles", url: "/profiles" },
+  // Repeated rather than inherited, for the same reason as openGraph above.
+  twitter: {
+    card: "summary",
+    title: "Profiles",
+    description: SITE_DESCRIPTION,
+  },
+};
 
 export default async function ProfilesPage(props: PageProps<"/profiles">) {
   const { error } = await props.searchParams;
