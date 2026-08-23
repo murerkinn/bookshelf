@@ -37,7 +37,24 @@ export type Book = {
   published?: string;
   language?: string;
   identifier?: string;
+  /**
+   * ISBN-13 or ISBN-10, digits only, and only when its check digit was valid —
+   * an identifier field holds whatever the publisher put there, so a number
+   * that has not been verified is not recorded as an ISBN.
+   */
+  isbn?: string;
   description?: string;
+  /** Subjects or tags, as the book records them. */
+  subjects?: string[];
+  /** The series this book belongs to, and its place in it. */
+  series?: string;
+  seriesIndex?: number;
+  /**
+   * Pages, for a format that has a fixed page count. A PDF does; an EPUB
+   * reflows and so has none, which is why this is optional rather than a field
+   * every book carries.
+   */
+  pages?: number;
   /** Cover file name within the folder; absent when the book has none. */
   cover?: string;
   formats: BookFormat[];

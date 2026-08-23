@@ -11,6 +11,8 @@ export type { BookshelfConfig, StorageConfig } from "./config.js";
 export { CONFIG_FILES } from "./config.js";
 export { parseJsonc, stripJsonComments } from "./jsonc.js";
 export { contentTypeFor } from "./mime.js";
+export type { PdfMetadata } from "./pdf.js";
+export { pdfDate, readPdfMetadata } from "./pdf.js";
 export type {
   ProviderCapabilities,
   ProviderManifest,
