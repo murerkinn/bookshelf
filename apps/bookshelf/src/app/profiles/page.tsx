@@ -1,4 +1,4 @@
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, CloudOff } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Avatar } from "@/app/avatar";
@@ -8,9 +8,12 @@ import {
   renameProfile,
   switchProfile,
 } from "@/app/profiles/actions";
-import { BUTTON, INPUT } from "@/app/ui";
+import { State } from "@/app/state";
+import { BUTTON, BUTTON_PRIMARY, INPUT } from "@/app/ui";
 import { OG_BASE, SITE_DESCRIPTION } from "@/lib/site";
 import { getServices } from "@/services/container";
+import { ifAvailable } from "@/services/errors";
+import type { Profile } from "@/services/profiles";
 import { activeProfile } from "@/services/session";
 
 /** Someone's household, which is nobody else's business to index. */
@@ -29,7 +32,17 @@ export const metadata: Metadata = {
 export default async function ProfilesPage(props: PageProps<"/profiles">) {
   const { error } = await props.searchParams;
   const { profiles } = await getServices();
-  const [all, current] = await Promise.all([profiles.list(), activeProfile()]);
+
+  // This page is the profile list, so unlike the shelf there is nothing to show
+  // without it — but "unreachable" is still a better answer than a 500, and it
+  // is the truthful one.
+  const household = await ifAvailable(async () => {
+    const [all, current] = await Promise.all([
+      profiles.list(),
+      activeProfile(),
+    ]);
+    return { all, current };
+  });
   const writable = profiles.writable;
 
   return (
@@ -47,7 +60,49 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
         Everyone reading from this library keeps their own place in each book.
       </p>
 
-      {typeof error === "string" && (
+      {!household ? (
+        <div className="mt-20">
+          <State
+            icon={CloudOff}
+            title="The library is unreachable"
+            actions={
+              <a href="/profiles" className={BUTTON_PRIMARY}>
+                Try again
+              </a>
+            }
+          >
+            <p>
+              Profiles are kept in the library itself, which cannot be read at
+              the moment. Nobody has been removed and nothing has been changed.
+            </p>
+          </State>
+        </div>
+      ) : (
+        <Household
+          all={household.all}
+          currentId={household.current.id}
+          writable={writable}
+          error={typeof error === "string" ? error : undefined}
+        />
+      )}
+    </main>
+  );
+}
+
+function Household({
+  all,
+  currentId,
+  writable,
+  error,
+}: {
+  all: Profile[];
+  currentId: string;
+  writable: boolean;
+  error?: string;
+}) {
+  return (
+    <>
+      {error && (
         <p className="mt-6 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </p>
@@ -63,7 +118,7 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
 
       <ul className="mt-10 divide-y divide-separator">
         {all.map((profile) => {
-          const active = profile.id === current.id;
+          const active = profile.id === currentId;
 
           return (
             <li
@@ -146,6 +201,6 @@ export default async function ProfilesPage(props: PageProps<"/profiles">) {
           Adding a profile starts reading as it.
         </p>
       )}
-    </main>
+    </>
   );
 }

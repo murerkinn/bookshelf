@@ -1,12 +1,17 @@
+import { CloudOff } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProfileMenu } from "@/app/profile-menu";
 import { SearchInput } from "@/app/search-input";
+import { State } from "@/app/state";
 import { BUTTON_PRIMARY, BUTTON_QUIET } from "@/app/ui";
 import { placeholder, tint } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
+import { ifAvailable } from "@/services/errors";
 import { activeProfile } from "@/services/session";
+
+const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
 
 /**
  * Searching filters through `?q=`, and every one of those is the same shelf
@@ -16,8 +21,6 @@ import { activeProfile } from "@/services/session";
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
-
-const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
 
 function encodeKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -71,96 +74,144 @@ export default async function Home(props: PageProps<"/">) {
   const { q } = await props.searchParams;
   const query = typeof q === "string" ? q : "";
 
+  const here = query ? `/?q=${encodeURIComponent(query)}` : "/";
   const { catalog, profiles, progress } = await getServices();
-  const profile = await activeProfile();
 
-  const [books, all, positions, everyone] = await Promise.all([
-    catalog.search(query),
-    catalog.all(),
-    progress.all(profile.id),
-    profiles.list(),
+  /*
+   * Who is reading, and how far they got, are not worth a shelf for. Both come
+   * out of the library, so both can be unreachable while the catalog is not —
+   * and a shelf of books with no profile chip and no Continue buttons is a far
+   * better answer than no shelf.
+   */
+  const profile = await ifAvailable(() => activeProfile());
+  const [everyone, positions] = await Promise.all([
+    ifAvailable(() => profiles.list()),
+    profile ? ifAvailable(() => progress.all(profile.id)) : undefined,
   ]);
-  const empty = all.length === 0;
+
+  // The catalog is the shelf, so this is the one read the page cannot do
+  // without — but it still degrades to a state that can say what happened
+  // rather than to the error boundary.
+  const shelf = await ifAvailable(async () => {
+    const [matching, all] = await Promise.all([
+      catalog.search(query),
+      catalog.all(),
+    ]);
+    return { matching, total: all.length };
+  });
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-semibold tracking-tight">Bookshelf</h1>
 
-        <ProfileMenu
-          profiles={everyone}
-          activeId={profile.id}
-          writable={profiles.writable}
-          from={query ? `/?q=${encodeURIComponent(query)}` : "/"}
-        />
+        {profile && everyone && (
+          <ProfileMenu
+            profiles={everyone}
+            activeId={profile.id}
+            writable={profiles.writable}
+            from={here}
+          />
+        )}
       </div>
 
-      <SearchInput query={query} />
-
-      {books.length === 0 ? (
-        <p className="mt-10 text-secondary">
-          {empty
-            ? "No catalog published yet. Run the publish script and upload its output."
-            : `No books match “${query}”.`}
-        </p>
+      {!shelf ? (
+        <div className="mt-20">
+          <State
+            icon={CloudOff}
+            title="The library is unreachable"
+            actions={
+              // A plain anchor rather than a Link: the point is a fresh request
+              // rather than whatever the router already has.
+              <a href={here} className={BUTTON_PRIMARY}>
+                Try again
+              </a>
+            }
+          >
+            <p>
+              Your books are where they were — this shelf just cannot read them
+              at the moment. Nothing has been lost, and nobody&rsquo;s reading
+              position has been touched.
+            </p>
+          </State>
+        </div>
       ) : (
-        <ul className="mt-10 divide-y divide-separator">
-          {books.map((book) => {
-            const readable = readableFormat(book);
+        <>
+          <SearchInput query={query} />
 
-            return (
-              <li
-                key={book.id}
-                className="flex items-center justify-between gap-6 py-4"
-              >
-                <div className="flex min-w-0 items-center gap-4">
-                  <Cover book={book} />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{book.title}</p>
-                    <p className="mt-1 truncate text-sm text-secondary">
-                      {book.authors.join(", ")}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-tertiary">
-                      {[
-                        book.published?.slice(0, 4),
-                        book.publisher,
-                        book.formats
-                          .map(
-                            (f) =>
-                              `${f.format.toUpperCase()} ${formatSize(f.size)}`,
-                          )
-                          .join(" · "),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                </div>
+          {!profile && (
+            <p className="mt-6 rounded-xl bg-fill px-4 py-3 text-sm text-secondary">
+              Profiles could not be read just now, so this is the shelf without
+              them — every book is here, but not where anyone got to in it.
+            </p>
+          )}
 
-                <div className="flex shrink-0 items-center gap-2">
-                  {readable && (
-                    <Link
-                      href={`/read/${encodeKey(bookKey(book.id, readable.file))}`}
-                      className={BUTTON_PRIMARY}
-                    >
-                      {positions[book.id] ? "Continue" : "Read"}
-                    </Link>
-                  )}
-                  {book.formats.map((format) => (
-                    <a
-                      key={format.file}
-                      href={`/download/${encodeKey(bookKey(book.id, format.file))}`}
-                      download
-                      className={BUTTON_QUIET}
-                    >
-                      {format.format.toUpperCase()}
-                    </a>
-                  ))}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+          {shelf.matching.length === 0 ? (
+            <p className="mt-10 text-secondary">
+              {shelf.total === 0
+                ? "No catalog published yet. Run the publish script and upload its output."
+                : `No books match “${query}”.`}
+            </p>
+          ) : (
+            <ul className="mt-10 divide-y divide-separator">
+              {shelf.matching.map((book) => {
+                const readable = readableFormat(book);
+
+                return (
+                  <li
+                    key={book.id}
+                    className="flex items-center justify-between gap-6 py-4"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <Cover book={book} />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{book.title}</p>
+                        <p className="mt-1 truncate text-sm text-secondary">
+                          {book.authors.join(", ")}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-tertiary">
+                          {[
+                            book.published?.slice(0, 4),
+                            book.publisher,
+                            book.formats
+                              .map(
+                                (f) =>
+                                  `${f.format.toUpperCase()} ${formatSize(f.size)}`,
+                              )
+                              .join(" · "),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      {readable && (
+                        <Link
+                          href={`/read/${encodeKey(bookKey(book.id, readable.file))}`}
+                          className={BUTTON_PRIMARY}
+                        >
+                          {positions?.[book.id] ? "Continue" : "Read"}
+                        </Link>
+                      )}
+                      {book.formats.map((format) => (
+                        <a
+                          key={format.file}
+                          href={`/download/${encodeKey(bookKey(book.id, format.file))}`}
+                          download
+                          className={BUTTON_QUIET}
+                        >
+                          {format.format.toUpperCase()}
+                        </a>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </main>
   );

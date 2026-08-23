@@ -1,12 +1,16 @@
-import { ArrowDownToLine, ChevronLeft } from "lucide-react";
+import { DEFAULT_PROFILE_ID } from "@bookshelf/core";
+import { ArrowDownToLine, ChevronLeft, CloudOff } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EpubReader } from "@/app/read/[...key]/epub-reader";
+import { State, StatePage } from "@/app/state";
+import { BUTTON_PRIMARY } from "@/app/ui";
 import { extension } from "@/lib/media";
 import { OG_BASE } from "@/lib/site";
 import { bookKey } from "@/services/catalog";
 import { getServices } from "@/services/container";
+import { ifAvailable } from "@/services/errors";
 import { activeProfile } from "@/services/session";
 
 function encodeKey(key: string): string {
@@ -72,8 +76,12 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
   const [id] = fileKey.split("/");
 
   const { catalog } = await getServices();
-  const book = await catalog.find(id);
-  if (!book || !book.formats.some((f) => fileKey.endsWith(`/${f.file}`))) {
+
+  // Undefined is a library that could not be read, which is not the same as a
+  // book that is not in it — one is worth coming back for and the other is not.
+  const book = await ifAvailable(() => catalog.find(id));
+  if (book === undefined) return <Unreachable />;
+  if (!book?.formats.some((f) => fileKey.endsWith(`/${f.file}`))) {
     notFound();
   }
 
@@ -121,14 +129,24 @@ async function EpubBody({
   bookId: string;
 }) {
   const { content, progress } = await getServices();
-  const profile = await activeProfile();
 
-  const [opfPath, saved] = await Promise.all([
-    // Resolving the package document also proves the archive is readable
-    // before the reader is handed anything.
-    content.packageDocument(fileKey),
-    progress.get(profile.id, bookId),
-  ]);
+  // A position nobody could read is no position, and the reader starts where its
+  // own copy says. Who is reading matters more: without it there is no position
+  // to write back to, so the reader is told not to try.
+  const profile = await ifAvailable(() => activeProfile());
+
+  const opened = await ifAvailable(async () => {
+    const [opfPath, saved] = await Promise.all([
+      // Resolving the package document also proves the archive is readable
+      // before the reader is handed anything.
+      content.packageDocument(fileKey),
+      profile ? progress.get(profile.id, bookId) : null,
+    ]);
+    return { opfPath, saved };
+  });
+  if (!opened) return <Unreachable />;
+
+  const { opfPath, saved } = opened;
   if (!opfPath) notFound();
 
   return (
@@ -136,9 +154,31 @@ async function EpubBody({
       opfUrl={`/book/${encodeKey(fileKey)}/${encodeKey(opfPath)}`}
       bookKey={fileKey}
       bookId={bookId}
-      profileId={profile.id}
+      profileId={profile?.id ?? DEFAULT_PROFILE_ID}
       saved={saved}
-      canSync={progress.writable}
+      canSync={progress.writable && profile !== undefined}
     />
+  );
+}
+
+/** Shown in place of the reader when the book cannot be reached. */
+function Unreachable() {
+  return (
+    <StatePage>
+      <State
+        icon={CloudOff}
+        title="This book is out of reach"
+        actions={
+          <Link href="/" className={BUTTON_PRIMARY}>
+            Back to the shelf
+          </Link>
+        }
+      >
+        <p>
+          The library cannot be read at the moment, so this book will not open.
+          Your place in it is safe — nothing has been written.
+        </p>
+      </State>
+    </StatePage>
   );
 }

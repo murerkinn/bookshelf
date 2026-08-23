@@ -121,6 +121,21 @@ come from: the CLI holds a whole book in memory, the app pulls one chapter at a
 time out of storage. Decompression goes through `DecompressionStream` rather
 than `node:zlib`, which is what lets the same code run in workerd and in Node.
 
+## Pages that are not showing a shelf
+
+```
+apps/bookshelf/src/app/
+  state.tsx         the shared block: glyph, title, sentence, a way out
+  not-found.tsx     a URL that matches nothing, and notFound() from the reader
+  error.tsx         the route boundary — a bug, or an outage nobody accounted for
+  global-error.tsx  when the root layout itself is what failed
+```
+
+`error.tsx` deliberately does not show the error's message: Next redacts it in
+production and hands over a digest instead, so anything shown would read as
+detail in development and as nothing in production. The digest is shown, since
+it is what ties what a reader saw to what the log recorded.
+
 ## Caching
 
 The catalog is held in an in-isolate memo backed by the Workers Cache API, for
