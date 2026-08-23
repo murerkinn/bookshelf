@@ -10,6 +10,8 @@ packages/core        the library format, the ZIP reader, the provider contract
 packages/provider-r2 Cloudflare R2, both halves of it
 packages/provider-fs the library as a directory on disk
 packages/sync        the CLI that builds a library and publishes it
+packages/fixtures    generated books, for tests and for the demo shelf
+tools/               one-off scripts: the demo shelf, the Gutenberg fetcher
 books/             books in       ) configured in bookshelf.config.json,
 library/           upload tree out)  both gitignored
 ```

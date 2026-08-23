@@ -39,7 +39,7 @@
     "check-types": "turbo run check-types",
     "bundle": "turbo run bundle",
     "sync": "turbo run sync --log-prefix=none --output-logs=new-only --",
-    "demo": "node test/fixtures.mjs",
+    "demo": "turbo run build --filter=@bookshelf/fixtures --log-prefix=none --output-logs=errors-only && node tools/demo.mjs",
     "demo:gutenberg": "node tools/gutenberg.mjs",
     "deploy": "turbo run deploy --log-prefix=none --",
     "preview": "turbo run preview --log-prefix=none --",

@@ -1,0 +1,53 @@
+{
+  "name": "@bookshelf/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Generated books and archives, for tests and for the demo shelf",
+  "author": "Murat Erkin Cicek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murerkinn/bookshelf.git",
+    "directory": "packages/fixtures"
+  },
+  "homepage": "https://github.com/murerkinn/bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/murerkinn/bookshelf/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./zip": {
+      "types": "./dist/zip.d.ts",
+      "default": "./dist/zip.js"
+    },
+    "./epub": {
+      "types": "./dist/epub.d.ts",
+      "default": "./dist/epub.js"
+    },
+    "./pdf": {
+      "types": "./dist/pdf.d.ts",
+      "default": "./dist/pdf.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "check-types": "tsc --build",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "@types/node": "^24"
+  }
+}

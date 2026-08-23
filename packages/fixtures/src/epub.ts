@@ -1,5 +1,5 @@
 import { deflateSync } from "node:zlib";
-import { crc32, writeZip } from "./zip.mjs";
+import { crc32, writeZip } from "./zip.js";
 
 /**
  * Builds EPUBs, for fixtures and for the demo shelf.
@@ -14,7 +14,7 @@ import { crc32, writeZip } from "./zip.mjs";
  * shelf. The prose is not theirs — see PLACEHOLDER.
  */
 
-function chunk(type, data) {
+function chunk(type: string, data: Uint8Array): Uint8Array {
   const body = new Uint8Array(4 + data.length);
   body.set(new TextEncoder().encode(type), 0);
   body.set(data, 4);
@@ -33,14 +33,18 @@ function chunk(type, data) {
  * generate and looks, at thumbnail size, exactly like a cover that failed to
  * load — which is the wrong thing for a demo shelf to suggest.
  */
-export function coverArt(width, height, [r, g, b]) {
-  const pixel = (x, y) => {
+export function coverArt(
+  width: number,
+  height: number,
+  [r, g, b]: Rgb,
+): Uint8Array {
+  const pixel = (x: number, y: number): Rgb => {
     // Darker towards the bottom, by up to a third.
     const shade = 1 - (y / height) * 0.35;
     let [pr, pg, pb] = [r * shade, g * shade, b * shade];
 
     const inset = Math.round(width * 0.16);
-    const band = (top, thickness) =>
+    const band = (top: number, thickness: number) =>
       y >= Math.round(height * top) &&
       y < Math.round(height * top) + thickness &&
       x >= inset &&
@@ -68,14 +72,19 @@ export function coverArt(width, height, [r, g, b]) {
   return png(width, height, pixel);
 }
 
+/** Red, green, blue, each 0-255. */
+export type Rgb = [number, number, number];
+
 /**
  * A PNG from a pixel function. Real image bytes rather than a stub, because
  * the sync tool hands covers to cwebp or sips and those will not thumbnail a
  * fake.
- *
- * @param {(x: number, y: number) => [number, number, number]} pixel
  */
-export function png(width, height, pixel) {
+export function png(
+  width: number,
+  height: number,
+  pixel: (x: number, y: number) => Rgb,
+): Uint8Array {
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width, false);
@@ -131,7 +140,7 @@ const SENTENCES = [
  * rather than merely available. Deterministic: the same chapter of the same
  * book always reads the same way.
  */
-function filler(seed, paragraphs = 6) {
+function filler(seed: number, paragraphs = 6): string[] {
   let state = seed * 2654435761 + 1;
   const next = () => {
     state = (state * 1103515245 + 12345) & 0x7fffffff;
@@ -147,7 +156,7 @@ function filler(seed, paragraphs = 6) {
   });
 }
 
-function escapeXml(value) {
+function escapeXml(value: string): string {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -155,7 +164,7 @@ function escapeXml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function chapterXhtml(title, heading, index) {
+function chapterXhtml(title: string, heading: string, index: number): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head><title>${escapeXml(heading)}</title></head>
@@ -173,21 +182,23 @@ function chapterXhtml(title, heading, index) {
 `;
 }
 
-/**
- * @param {object} book
- * @param {string} book.title
- * @param {string[]} book.authors
- * @param {string} [book.publisher]
- * @param {string} [book.published]
- * @param {string} [book.language]
- * @param {string} [book.description]
- * @param {string[]} [book.subjects]
- * @param {number} [book.chapters]
- * @param {[number, number, number]} [book.colour] cover colour
- * @param {boolean} [book.cover] false for a book with no cover at all
- * @returns {Uint8Array} the archive
- */
-export function epub(book) {
+/** A book to generate. Only a title is required. */
+export type BookSpec = {
+  title: string;
+  authors?: string[];
+  publisher?: string;
+  published?: string;
+  language?: string;
+  description?: string;
+  subjects?: string[];
+  chapters?: number;
+  /** The cover's base colour. */
+  colour?: Rgb;
+  /** False for a book with no cover at all, which the shelf has a tile for. */
+  cover?: boolean;
+};
+
+export function epub(book: BookSpec): Uint8Array {
   const {
     title,
     authors = [],

@@ -1,7 +1,6 @@
-#!/usr/bin/env node
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { epub } from "./lib/epub.mjs";
+import { type BookSpec, epub } from "./epub.js";
 
 /**
  * A shelf of books that can be generated anywhere, for the demo and for tests.
@@ -13,7 +12,12 @@ import { epub } from "./lib/epub.mjs";
  * `Meditations` deliberately has no cover, so the shelf's placeholder tile is
  * exercised too.
  */
-export const BOOKS = [
+export type DemoBook = BookSpec & {
+  /** The file name to write it as, without an extension. */
+  file: string;
+};
+
+export const BOOKS: DemoBook[] = [
   {
     file: "pride-and-prejudice",
     title: "Pride and Prejudice",
@@ -101,52 +105,17 @@ export const BOOKS = [
 ];
 
 /** Writes the shelf into `directory` as EPUB files. Returns their paths. */
-export async function writeBooks(directory, books = BOOKS) {
+export async function writeBooks(
+  directory: string,
+  books: readonly DemoBook[] = BOOKS,
+): Promise<string[]> {
   await mkdir(directory, { recursive: true });
 
-  const written = [];
+  const written: string[] = [];
   for (const book of books) {
     const file = path.join(directory, `${book.file}.epub`);
     await writeFile(file, epub(book));
     written.push(file);
   }
   return written;
-}
-
-async function isEmpty(directory) {
-  try {
-    return (await readdir(directory)).length === 0;
-  } catch {
-    return true;
-  }
-}
-
-async function main(argv) {
-  const force = argv.includes("--force");
-  const target = argv.find((arg) => !arg.startsWith("--")) ?? "books";
-  const directory = path.resolve(target);
-
-  if (!force && !(await isEmpty(directory))) {
-    console.error(
-      `${directory} is not empty.\n\n` +
-        "Refusing to add demo books to a directory that already holds some — " +
-        "they would be published alongside yours and be tedious to tell " +
-        "apart. Pass a different directory, or --force if you meant it.",
-    );
-    process.exit(1);
-  }
-
-  const written = await writeBooks(directory);
-  console.log(`Wrote ${written.length} books to ${directory}`);
-  console.log("\nPublish and serve them with:\n");
-  console.log("  npm run sync -- --create");
-  console.log("  npm run build && npm start -w @bookshelf/app\n");
-}
-
-// Only when run directly, so the exports stay importable from tests.
-if (
-  process.argv[1] &&
-  import.meta.url.endsWith(path.basename(process.argv[1]))
-) {
-  await main(process.argv.slice(2));
 }
