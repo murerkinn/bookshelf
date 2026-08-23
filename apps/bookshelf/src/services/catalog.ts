@@ -5,6 +5,7 @@ import {
   type Catalog,
   type Storage,
 } from "@bookshelf/core";
+import { isUnavailable, optional, reading } from "@/services/errors";
 import type { ResponseCache } from "@/services/ports/cache";
 
 /**
@@ -23,11 +24,24 @@ export { bookKey } from "@bookshelf/core";
  */
 const TTL_SECONDS = 60;
 
+/**
+ * How long a catalog that could not be refreshed goes on being served.
+ *
+ * Short, because it is stale by definition, and not zero because the
+ * alternative is asking a failing storage again on every keystroke. One attempt
+ * per isolate per this, rather than one per render.
+ */
+const STALE_SECONDS = 10;
+
 const CACHE_KEY = "https://bookshelf.internal/catalog";
 
 /**
  * In-isolate memo, the tier in front of the response cache. A warm isolate
  * answers with no I/O at all.
+ *
+ * Kept past its expiry rather than discarded, because an expired catalog is the
+ * best answer available when a refresh fails: the books in it are real, and a
+ * shelf a minute out of date beats an error page.
  */
 let memo: { books: Book[]; expiresAt: number } | null = null;
 
@@ -45,33 +59,70 @@ export class CatalogService {
     this.cache = cache;
   }
 
+  /**
+   * Every book in the library.
+   *
+   * Throws {@link LibraryUnavailableError} only when there is nothing to answer
+   * with at all — storage is unreachable and no catalog has been read yet. Once
+   * one has, a failure serves that instead, because the shelf staying up is
+   * worth more than it being current.
+   */
   async all(): Promise<Book[]> {
     const now = Date.now();
     if (memo && memo.expiresAt > now) return memo.books;
 
-    const cached = await this.cache.match(CACHE_KEY);
+    const cached = await this.cached();
     if (cached) {
-      const books = (await cached.json()) as Book[];
-      memo = { books, expiresAt: now + TTL_SECONDS * 1000 };
-      return books;
+      memo = { books: cached, expiresAt: now + TTL_SECONDS * 1000 };
+      return cached;
     }
 
-    const books = await this.load();
-    memo = { books, expiresAt: now + TTL_SECONDS * 1000 };
-    this.cache.put(
-      CACHE_KEY,
-      new Response(JSON.stringify(books), {
-        headers: {
-          "content-type": "application/json",
-          "cache-control": `max-age=${TTL_SECONDS}`,
-        },
-      }),
+    try {
+      const books = await this.load();
+      memo = { books, expiresAt: now + TTL_SECONDS * 1000 };
+      this.store(books);
+      return books;
+    } catch (error) {
+      if (!isUnavailable(error) || !memo) throw error;
+
+      // Serve what was last read, and stop asking for a moment: every keystroke
+      // in the search box re-renders the page, and a failing storage should not
+      // be asked once per keystroke.
+      memo = { books: memo.books, expiresAt: now + STALE_SECONDS * 1000 };
+      return memo.books;
+    }
+  }
+
+  /**
+   * The catalog as the response cache has it, or undefined for anything that
+   * went wrong — a miss, an unreachable cache, an entry that will not parse.
+   * None of those is a reason not to read the real thing.
+   */
+  private async cached(): Promise<Book[] | undefined> {
+    const hit = await optional(() => this.cache.match(CACHE_KEY));
+    if (!hit) return undefined;
+    return optional(async () => (await hit.json()) as Book[]);
+  }
+
+  /** Fills the cache for the next isolate. Never the caller's problem. */
+  private store(books: Book[]): void {
+    void optional(async () =>
+      this.cache.put(
+        CACHE_KEY,
+        new Response(JSON.stringify(books), {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": `max-age=${TTL_SECONDS}`,
+          },
+        }),
+      ),
     );
-    return books;
   }
 
   private async load(): Promise<Book[]> {
-    const bytes = await this.storage.readBytes(CATALOG_FILE);
+    const bytes = await reading("the catalog", () =>
+      this.storage.readBytes(CATALOG_FILE),
+    );
     // An unpublished catalog is an empty shelf, not an error: the page says so.
     if (!bytes) return [];
 

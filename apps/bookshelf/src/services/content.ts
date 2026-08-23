@@ -7,6 +7,7 @@ import {
   type ZipDirectory,
   type ZipEntry,
 } from "@bookshelf/core";
+import { optional, reading } from "@/services/errors";
 import type { ResponseCache } from "@/services/ports/cache";
 
 /**
@@ -58,9 +59,13 @@ export class BookContentService {
     const remembered = memo.get(key);
     if (remembered) return remembered;
 
-    const stored = await this.cache.match(this.cacheKey(key));
-    if (stored) {
-      const entries = (await stored.json()) as Record<string, ZipEntry>;
+    const stored = await optional(() => this.cache.match(this.cacheKey(key)));
+    const entries = stored
+      ? await optional(
+          async () => (await stored.json()) as Record<string, ZipEntry>,
+        )
+      : undefined;
+    if (entries) {
       const directory: ZipDirectory = new Map(Object.entries(entries));
       remember(key, directory);
       return directory;
@@ -76,18 +81,25 @@ export class BookContentService {
    * holding the old one would just hand it back on the next request.
    */
   private async reread(key: string): Promise<ZipDirectory | null> {
-    const directory = await readZipDirectory(this.source(key));
+    // Null from the reader means "not a readable archive", which is a book
+    // problem. Storage failing on the way there is not, and must not be
+    // reported as one — a chapter is missing for the moment, not for good.
+    const directory = await reading("a book", () =>
+      readZipDirectory(this.source(key)),
+    );
     if (!directory) return null;
     remember(key, directory);
 
-    this.cache.put(
-      this.cacheKey(key),
-      new Response(JSON.stringify(Object.fromEntries(directory)), {
-        headers: {
-          "content-type": "application/json",
-          "cache-control": `max-age=${DIRECTORY_TTL_SECONDS}`,
-        },
-      }),
+    void optional(async () =>
+      this.cache.put(
+        this.cacheKey(key),
+        new Response(JSON.stringify(Object.fromEntries(directory)), {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": `max-age=${DIRECTORY_TTL_SECONDS}`,
+          },
+        }),
+      ),
     );
 
     return directory;
@@ -102,7 +114,9 @@ export class BookContentService {
     const entry = directory?.get(entryPath);
     if (!entry) return null;
 
-    const bytes = await readZipEntry(this.source(key), entry);
+    const bytes = await reading("a chapter", () =>
+      readZipEntry(this.source(key), entry),
+    );
     if (bytes) return bytes;
 
     // The directory said there was an entry here and there was not. The
@@ -117,7 +131,7 @@ export class BookContentService {
     const moved = fresh?.get(entryPath);
     if (!moved || moved.localOffset === entry.localOffset) return null;
 
-    return readZipEntry(this.source(key), moved);
+    return reading("a chapter", () => readZipEntry(this.source(key), moved));
   }
 
   /**

@@ -1,4 +1,5 @@
 import { getServices } from "@/services/container";
+import { isUnavailable } from "@/services/errors";
 import { activeProfile } from "@/services/session";
 
 /** A CFI for a deep position is a couple of hundred characters at most. */
@@ -37,17 +38,32 @@ export async function POST(request: Request) {
 
   const { catalog, progress } = await getServices();
 
-  // Checked against the catalog rather than trusted, so the progress file
-  // cannot be grown a key at a time by anything that can post to this URL.
-  if (!(await catalog.find(bookId))) {
-    return Response.json({ error: "no such book" }, { status: 404 });
+  try {
+    // Checked against the catalog rather than trusted, so the progress file
+    // cannot be grown a key at a time by anything that can post to this URL.
+    if (!(await catalog.find(bookId))) {
+      return Response.json({ error: "no such book" }, { status: 404 });
+    }
+
+    const profile = await activeProfile();
+    const saved = await progress.save(profile.id, bookId, {
+      cfi: field(body.cfi),
+      href: field(body.href),
+    });
+
+    return Response.json({ saved }, { status: saved ? 200 : 202 });
+  } catch (error) {
+    if (!isUnavailable(error)) throw error;
+
+    // The same answer as a library that cannot be written to, because to the
+    // reader it is the same situation: keep the position in the browser and
+    // try again later. `saved: false` is what it already knows how to handle.
+    return Response.json(
+      { saved: false },
+      {
+        status: 503,
+        headers: { "retry-after": "5", "cache-control": "no-store" },
+      },
+    );
   }
-
-  const profile = await activeProfile();
-  const saved = await progress.save(profile.id, bookId, {
-    cfi: field(body.cfi),
-    href: field(body.href),
-  });
-
-  return Response.json({ saved }, { status: saved ? 200 : 202 });
 }

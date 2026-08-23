@@ -9,6 +9,7 @@ import {
   type Storage,
   writableStorage,
 } from "@bookshelf/core";
+import { optional, reading, writing } from "@/services/errors";
 
 export type { Profile } from "@bookshelf/core";
 
@@ -144,12 +145,30 @@ export class ProfileService {
 
     await this.save(profiles.filter((profile) => profile.id !== id));
 
+    // Best effort, and deliberately after the list was written: the profile is
+    // gone either way, and failing here would report that the removal did not
+    // happen when it did. What is left behind is an orphan file that the next
+    // profile to be allocated this id would inherit — which is why the id
+    // allocator never reuses one that is taken.
     const target = writableStorage(this.storage);
-    await target?.remove(progressFile(id));
+    await optional(() => target?.remove(progressFile(id)) ?? Promise.resolve());
   }
 
+  /**
+   * The profile file, or an empty list where there is none.
+   *
+   * Storage that cannot be read is *not* treated as an empty list, unlike
+   * almost everywhere else in the app. The reason is that the answer decides
+   * which profile a request belongs to, and falling back to the implicit
+   * default would resolve every reader to `default` — so the next page turn
+   * would write one person's position into a file belonging to nobody, and the
+   * position it displaced would be gone. Failing to render the shelf is
+   * recoverable; quietly writing into the wrong file is not.
+   */
   private async stored(): Promise<Profile[]> {
-    const bytes = await this.storage.readBytes(PROFILES_FILE);
+    const bytes = await reading("the profile list", () =>
+      this.storage.readBytes(PROFILES_FILE),
+    );
     if (!bytes) return [];
 
     try {
@@ -171,10 +190,12 @@ export class ProfileService {
     const target = writableStorage(this.storage);
     if (!target) throw new ReadOnlyLibraryError();
 
-    await target.write(
-      PROFILES_FILE,
-      encode({ version: STATE_VERSION, profiles } satisfies Profiles),
-      "application/json",
+    await writing("the profile list", () =>
+      target.write(
+        PROFILES_FILE,
+        encode({ version: STATE_VERSION, profiles } satisfies Profiles),
+        "application/json",
+      ),
     );
   }
 }

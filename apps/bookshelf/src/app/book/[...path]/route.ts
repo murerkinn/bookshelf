@@ -1,5 +1,7 @@
+import { serviceUnavailable } from "@/lib/http";
 import { entryContentType } from "@/lib/media";
 import { getServices } from "@/services/container";
+import { optional } from "@/services/errors";
 
 /**
  * A book's contents are fixed for a given key, and the reader re-requests
@@ -41,10 +43,17 @@ export async function GET(
   const { content, cache } = await getServices();
 
   const cacheKey = request.url;
-  const hit = await cache.match(cacheKey);
+  const hit = await optional(() => cache.match(cacheKey));
   if (hit) return hit;
 
-  const body = await content.entry(target.key, target.entryPath);
+  // Null is a chapter this book does not have, which is a 404. A library that
+  // could not be reached is not, and `serviceUnavailable` tells them apart.
+  let body: Uint8Array<ArrayBuffer> | null;
+  try {
+    body = await content.entry(target.key, target.entryPath);
+  } catch (error) {
+    return serviceUnavailable(error);
+  }
   if (!body) {
     return new Response("Not found", { status: 404 });
   }
@@ -62,6 +71,6 @@ export async function GET(
     },
   });
 
-  cache.put(cacheKey, response.clone());
+  void optional(async () => cache.put(cacheKey, response.clone()));
   return response;
 }

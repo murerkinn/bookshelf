@@ -1,5 +1,8 @@
+import { normaliseEtag } from "@bookshelf/core";
+import { serviceUnavailable } from "@/lib/http";
 import { imageContentType, isImage } from "@/lib/media";
 import { getServices } from "@/services/container";
+import { optional, reading } from "@/services/errors";
 
 /**
  * A day, rather than `immutable`. Covers only change when one is re-uploaded to
@@ -8,17 +11,26 @@ import { getServices } from "@/services/container";
  */
 const MAX_AGE_SECONDS = 86400;
 
-/** Bare entity tag, with any weak marker and quotes removed. */
-function normaliseEtag(etag: string): string {
-  return etag.trim().replace(/^W\//, "").replace(/"/g, "");
-}
-
 /**
  * Serves a cover image out of the private bucket. The key comes from the book's
  * metadata — books without a cover get an inline placeholder from the page
  * instead of a request here.
  */
 export async function GET(
+  request: Request,
+  routeContext: RouteContext<"/cover/[...key]">,
+) {
+  try {
+    return await serve(request, routeContext);
+  } catch (error) {
+    // A cover that cannot be fetched leaves a gap in the shelf, which the page
+    // already copes with — but it should not be cached as though it were a
+    // book with no cover at all.
+    return serviceUnavailable(error);
+  }
+}
+
+async function serve(
   request: Request,
   routeContext: RouteContext<"/cover/[...key]">,
 ) {
@@ -36,7 +48,7 @@ export async function GET(
   const cacheKey = request.url;
   const conditional = request.headers.get("if-none-match");
 
-  const hit = await cache.match(cacheKey);
+  const hit = await optional(() => cache.match(cacheKey));
   if (hit) {
     const etag = hit.headers.get("etag");
     if (
@@ -49,9 +61,11 @@ export async function GET(
     return hit;
   }
 
-  const found = await storage.read(objectKey, {
-    ifNoneMatch: conditional ?? undefined,
-  });
+  const found = await reading("a cover", () =>
+    storage.read(objectKey, {
+      ifNoneMatch: conditional ?? undefined,
+    }),
+  );
   if (!found) {
     return new Response("Not found", { status: 404 });
   }
@@ -68,7 +82,7 @@ export async function GET(
 
   headers.set("content-length", String(found.object.size));
   const response = new Response(found.body, { headers });
-  cache.put(cacheKey, response.clone());
+  void optional(async () => cache.put(cacheKey, response.clone()));
 
   return response;
 }

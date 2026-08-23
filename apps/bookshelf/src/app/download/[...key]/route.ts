@@ -5,7 +5,9 @@ import {
   parseByteRange,
   unsatisfiedRange,
 } from "@bookshelf/core";
+import { serviceUnavailable } from "@/lib/http";
 import { getServices } from "@/services/container";
+import { reading } from "@/services/errors";
 
 /** RFC 6266 `filename` + `filename*`, so non-ASCII titles survive the trip. */
 function contentDisposition(fileName: string, inline: boolean): string {
@@ -33,6 +35,19 @@ export async function GET(
   request: Request,
   ctx: RouteContext<"/download/[...key]">,
 ) {
+  try {
+    return await serve(request, ctx);
+  } catch (error) {
+    // A download that fails mid-stream cannot be recalled, but one that fails
+    // before a byte is sent can still say why.
+    return serviceUnavailable(error);
+  }
+}
+
+async function serve(
+  request: Request,
+  ctx: RouteContext<"/download/[...key]">,
+) {
   const { key } = await ctx.params;
   const objectKey = key.join("/");
 
@@ -49,7 +64,7 @@ export async function GET(
   // at the metadata first. A plain download does not, and does not pay for it.
   let wanted: ReturnType<typeof parseByteRange> = { kind: "whole" };
   if (requestedRange) {
-    const object = await storage.head(objectKey);
+    const object = await reading("a book", () => storage.head(objectKey));
     if (!object) return new Response("Not found", { status: 404 });
 
     // A resumed download names the version it already holds part of. If the
@@ -74,10 +89,12 @@ export async function GET(
     }
   }
 
-  const found = await storage.read(objectKey, {
-    ...(conditional ? { ifNoneMatch: conditional } : {}),
-    ...(wanted.kind === "range" ? { range: wanted.range } : {}),
-  });
+  const found = await reading("a book", () =>
+    storage.read(objectKey, {
+      ...(conditional ? { ifNoneMatch: conditional } : {}),
+      ...(wanted.kind === "range" ? { range: wanted.range } : {}),
+    }),
+  );
   if (!found) return new Response("Not found", { status: 404 });
 
   const { object } = found;

@@ -41,6 +41,7 @@ apps/bookshelf/src/services/
   content.ts      BookContentService — files from inside a book
   profiles.ts     ProfileService — who is reading
   progress.ts     ProgressService — how far they got
+  errors.ts       the difference between absent and unreachable
   session.ts      which profile a request belongs to, and how its cookie is set
   container.ts    createServices() wires them; getServices() is the only
                   place that names a provider
@@ -59,6 +60,55 @@ lives on `StorageAdmin`, which never runs in the app.
 front a destination that genuinely cannot be written to. Callers narrow with
 `writableStorage()` and degrade rather than throwing, so a read-only library is
 a working shelf whose positions stay in the browser.
+
+## Absent, or unreachable
+
+Every service tells three states apart, and the third is the one worth naming.
+
+**Present** is the ordinary case. **Absent** is ordinary too, and most of the
+app's care goes into it: an unpublished catalog is an empty shelf, a library with
+no profile file has one implicit profile, a book nobody has opened has no saved
+position, a corrupt file reads as though it were not there. None of those is an
+error, and none of them fails a page.
+
+**Unreachable** is storage that exists and is failing — a network blip, a bucket
+that has gone away, a disk that has. It used to arrive as whatever the provider
+happened to throw, which is indistinguishable from a bug and takes a page down
+with it. `LibraryUnavailableError` names it, so each caller can answer for
+itself, and the answers differ because the stakes do:
+
+| | when the library cannot be read |
+| --- | --- |
+| the catalog | the last one read, if there is one; otherwise the shelf says so |
+| profiles | refuses — see below |
+| reading positions | none, and a save answers `false` |
+| a book's contents | refuses, and the route answers `503` rather than `404` |
+
+Reading positions degrade to nothing because that costs nothing: the reader
+reconciles whatever it is given against the copy the browser kept, newest wins,
+so a position missing from an answer is not a position lost. **Saving** is the
+opposite, and the one place degrading would lose data — the file holds every
+book a profile has open and is rewritten whole, so writing it after a failed
+read would replace all of those positions with one. A reader told `false` keeps
+its place locally and tries again; that is the same path a read-only library
+already takes.
+
+Profiles refuse rather than degrade for a related reason. The answer decides
+which file a position is written to, and falling back to the implicit default
+would resolve every reader to `default` — writing one person's place in a book
+into a file belonging to nobody. Failing to render is recoverable; quietly
+writing into the wrong file is not.
+
+The shelf then treats its reads by how much it needs them. The catalog is the
+page, so a failure there becomes a state that says the library is unreachable.
+Profiles and positions are not, so a failure there renders the shelf without a
+profile chip and without Continue buttons, and says which is missing. A `503`
+carries `Retry-After` and `no-store`, because the next request may well succeed
+and a cached outage outlives the outage.
+
+Anything that is *not* an unreachable library is left to throw, and reaches
+`app/error.tsx`. A page rendering less than it wanted to is a reasonable answer
+to an outage and a terrible one to a bug.
 
 The app names both providers with fixed specifiers and picks between them at
 startup; the CLI resolves its provider from config at run time, because a CLI
