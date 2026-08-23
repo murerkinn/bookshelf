@@ -5,7 +5,17 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-async function commandExists(command) {
+/** Renders the first page of a document to a PNG at `target`. */
+export type Rasteriser = (file: string, target: string) => Promise<void>;
+
+/** Scales an image down, writing whatever format it is named for. */
+export type Thumbnailer = {
+  /** Including the dot, e.g. `.webp`. */
+  extension: string;
+  convert: (source: string, target: string, height: number) => Promise<unknown>;
+};
+
+async function commandExists(command: string): Promise<boolean> {
   try {
     await run("which", [command]);
     return true;
@@ -14,12 +24,13 @@ async function commandExists(command) {
   }
 }
 
-let rasteriser;
-export async function findRasteriser() {
+let rasteriser: Rasteriser | null | undefined;
+
+export async function findRasteriser(): Promise<Rasteriser | null> {
   if (rasteriser !== undefined) return rasteriser;
 
   if (await commandExists("pdftoppm")) {
-    rasteriser = async (file, target) => {
+    rasteriser = async (file: string, target: string) => {
       // -singlefile makes it write exactly <base>.png, with no page suffix.
       await run("pdftoppm", [
         "-png",
@@ -35,11 +46,11 @@ export async function findRasteriser() {
       ]);
     };
   } else if (await commandExists("sips")) {
-    rasteriser = async (file, target) => {
+    rasteriser = async (file: string, target: string) => {
       await run("sips", ["-s", "format", "png", file, "--out", target]);
     };
   } else if (await commandExists("qlmanage")) {
-    rasteriser = async (file, target) => {
+    rasteriser = async (file: string, target: string) => {
       const directory = path.dirname(target);
       await run("qlmanage", ["-t", "-s", "600", "-o", directory, file]);
       // qlmanage names its output "<original file name>.png".
@@ -57,14 +68,15 @@ export async function findRasteriser() {
  * around 1200x1574 and near a megabyte, while the shelf renders it into a
  * 40x60 slot — roughly a hundred times more image than the page can show.
  */
-let thumbnailer;
-export async function findThumbnailer() {
+let thumbnailer: Thumbnailer | null | undefined;
+
+export async function findThumbnailer(): Promise<Thumbnailer | null> {
   if (thumbnailer !== undefined) return thumbnailer;
 
   if (await commandExists("cwebp")) {
     thumbnailer = {
       extension: ".webp",
-      convert: (source, target, height) =>
+      convert: (source: string, target: string, height: number) =>
         // Width 0 tells cwebp to preserve the aspect ratio.
         run("cwebp", [
           "-quiet",
@@ -83,7 +95,7 @@ export async function findThumbnailer() {
     // JPEG is the fallback. Still ~50x smaller than the original.
     thumbnailer = {
       extension: ".jpg",
-      convert: (source, target, height) =>
+      convert: (source: string, target: string, height: number) =>
         run("sips", [
           "-Z",
           String(height),

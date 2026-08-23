@@ -25,7 +25,7 @@ services:
     profiles: [sync]
     # Arguments after `docker compose run --rm sync` are appended here, so
     # `--create`, `--force` and `--dry-run` all work as they do locally.
-    entrypoint: ["node", "packages/sync/sync.mjs"]
+    entrypoint: ["node", "packages/sync/dist/sync.js"]
     volumes:
       - ./books:/books:ro
       - library:/data

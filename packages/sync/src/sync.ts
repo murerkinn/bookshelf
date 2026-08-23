@@ -27,11 +27,23 @@
 
 import { access } from "node:fs/promises";
 import path from "node:path";
-import { syncLibrary } from "./lib/bucket.mjs";
-import { buildLibrary } from "./lib/build.mjs";
-import { CONFIG_FILES, DEFAULTS, loadConfig } from "./lib/config.mjs";
-import { findThumbnailer } from "./lib/images.mjs";
-import { BUILT_IN_IDS, createAdmin } from "./lib/providers.mjs";
+import { syncLibrary } from "./lib/bucket.js";
+import { buildLibrary } from "./lib/build.js";
+import { CONFIG_FILES, DEFAULTS, loadConfig } from "./lib/config.js";
+import { findThumbnailer } from "./lib/images.js";
+import { BUILT_IN_IDS, createAdmin } from "./lib/providers.js";
+import { messageOf } from "./lib/util.js";
+
+type Options = {
+  force: boolean;
+  dryRun: boolean;
+  local: boolean;
+  full: boolean;
+  create: boolean;
+  /** Left null so the configured value shows through. */
+  provider: string | null;
+  height: number | null;
+};
 
 const USAGE = `usage: npm run sync -- [options]
 
@@ -47,14 +59,13 @@ const USAGE = `usage: npm run sync -- [options]
 Directories and provider settings are read from ${CONFIG_FILES[0]}; the flags
 above override it for one run.`;
 
-function parseArgs(argv) {
-  const options = {
+function parseArgs(argv: readonly string[]): Options {
+  const options: Options = {
     force: false,
     dryRun: false,
     local: false,
     full: false,
     create: false,
-    /** Left unset so the configured value shows through. */
     provider: null,
     height: null,
   };
@@ -65,7 +76,7 @@ function parseArgs(argv) {
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--local") options.local = true;
     else if (arg === "--create") options.create = true;
-    else if (arg === "--provider") options.provider = argv[++i];
+    else if (arg === "--provider") options.provider = argv[++i] ?? "";
     else if (arg === "--size") options.height = Number(argv[++i]);
     else if (arg === "--full") options.full = true;
     else throw new Error(`unknown option: ${arg}`);
@@ -81,7 +92,7 @@ function parseArgs(argv) {
   return options;
 }
 
-async function exists(file) {
+async function exists(file: string): Promise<boolean> {
   try {
     await access(file);
     return true;
@@ -90,19 +101,19 @@ async function exists(file) {
   }
 }
 
-const log = (message) => console.log(message);
+const log = (message: string): void => console.log(message);
 
-async function main() {
-  let options;
+async function main(): Promise<void> {
+  let options: Options;
   try {
     options = parseArgs(process.argv.slice(2));
   } catch (error) {
-    console.error(`${error.message}\n\n${USAGE}`);
+    console.error(`${messageOf(error)}\n\n${USAGE}`);
     process.exit(1);
   }
 
   const config = await loadConfig();
-  const here = (file) => path.relative(config.root, file) || ".";
+  const here = (file: string) => path.relative(config.root, file) || ".";
 
   if (!(await exists(config.inputDir))) {
     console.error(
@@ -178,6 +189,11 @@ async function main() {
 
   log("");
 
+  // Only a dry run leaves this unresolved, and that returned above. Stated
+  // rather than assumed, because the two are linked by a condition several
+  // steps back and nothing else would notice if that link were broken.
+  if (!admin) throw new Error("no destination to publish through");
+
   const result = await syncLibrary(admin, config.outputDir, {
     force: options.force,
     log,
@@ -204,6 +220,6 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  console.error(`\n${error.message}`);
+  console.error(`\n${messageOf(error)}`);
   process.exit(1);
 }

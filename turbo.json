@@ -30,8 +30,10 @@
       "cache": false,
       "persistent": true
     },
+    // Its own build too, not just its dependencies': the CLI is TypeScript and
+    // runs from `dist`, like every other package here.
     "sync": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
       "cache": false
     },
     "preview": {

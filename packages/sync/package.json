@@ -19,18 +19,54 @@
   },
   "type": "module",
   "bin": {
-    "bookshelf-sync": "./sync.mjs"
+    "bookshelf-sync": "./dist/sync.js"
   },
   "files": [
-    "sync.mjs",
-    "lib"
+    "dist"
   ],
   "scripts": {
-    "sync": "node ./sync.mjs"
+    "build": "tsc --build",
+    "check-types": "tsc --build",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "sync": "node ./dist/sync.js"
   },
   "dependencies": {
     "@bookshelf/core": "*",
     "@bookshelf/provider-fs": "*",
     "@bookshelf/provider-r2": "*"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/sync.d.ts",
+      "default": "./dist/sync.js"
+    },
+    "./build": {
+      "types": "./dist/lib/build.d.ts",
+      "default": "./dist/lib/build.js"
+    },
+    "./bucket": {
+      "types": "./dist/lib/bucket.d.ts",
+      "default": "./dist/lib/bucket.js"
+    },
+    "./config": {
+      "types": "./dist/lib/config.d.ts",
+      "default": "./dist/lib/config.js"
+    },
+    "./epub": {
+      "types": "./dist/lib/epub.d.ts",
+      "default": "./dist/lib/epub.js"
+    },
+    "./metadata": {
+      "types": "./dist/lib/metadata.d.ts",
+      "default": "./dist/lib/metadata.js"
+    },
+    "./pdf": {
+      "types": "./dist/lib/pdf.d.ts",
+      "default": "./dist/lib/pdf.js"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^7.0.2"
   }
 }

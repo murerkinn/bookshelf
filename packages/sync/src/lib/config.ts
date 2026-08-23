@@ -1,6 +1,24 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { CONFIG_FILES, parseJsonc } from "@bookshelf/core";
+import {
+  type BookshelfConfig,
+  CONFIG_FILES,
+  parseJsonc,
+  type StorageConfig,
+} from "@bookshelf/core";
+import { codeOf, messageOf } from "./util.js";
+
+/** Where a run reads from, writes to, and publishes through. */
+export type ResolvedConfig = {
+  /** The directory the config was found in, or the project root. */
+  root: string;
+  /** The file it came from, or null where the defaults applied. */
+  configFile: string | null;
+  inputDir: string;
+  outputDir: string;
+  coverHeight: number;
+  storage: StorageConfig & { provider: string; projectRoot: string };
+};
 
 /**
  * Where a library comes from and where it goes, read from a config file rather
@@ -27,11 +45,11 @@ export const DEFAULTS = {
 
 export const BOOK_EXTENSIONS = new Set([".epub", ".pdf"]);
 
-async function readJsonc(file) {
-  return parseJsonc(await readFile(file, "utf8"));
+async function readJsonc(file: string): Promise<BookshelfConfig> {
+  return parseJsonc<BookshelfConfig>(await readFile(file, "utf8"));
 }
 
-async function exists(target) {
+async function exists(target: string): Promise<boolean> {
   try {
     await stat(target);
     return true;
@@ -40,12 +58,12 @@ async function exists(target) {
   }
 }
 
-async function readIfPresent(file) {
+async function readIfPresent(file: string): Promise<BookshelfConfig | null> {
   try {
     return await readJsonc(file);
   } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw new Error(`could not read ${file}: ${error.message}`);
+    if (codeOf(error) === "ENOENT") return null;
+    throw new Error(`could not read ${file}: ${messageOf(error)}`);
   }
 }
 
@@ -57,11 +75,14 @@ async function readIfPresent(file) {
  * a project with no config file would look for books inside node_modules
  * rather than beside its own package.json.
  */
-async function findProjectRoot(from) {
+async function findProjectRoot(from: string): Promise<string> {
   let directory = path.resolve(from);
 
   for (;;) {
-    const manifest = await readIfPresent(path.join(directory, "package.json"));
+    // Read as a manifest rather than as a config file; only one key matters.
+    const manifest = (await readIfPresent(
+      path.join(directory, "package.json"),
+    )) as { workspaces?: unknown } | null;
     // A workspace root, or any project not itself a workspace member.
     if (manifest?.workspaces) return directory;
     if (await exists(path.join(directory, ".git"))) return directory;
@@ -73,7 +94,9 @@ async function findProjectRoot(from) {
 }
 
 /** Walks up from `from` for the first directory holding a config file. */
-async function findConfig(from) {
+async function findConfig(
+  from: string,
+): Promise<{ file: string; config: BookshelfConfig; root: string } | null> {
   let directory = path.resolve(from);
 
   for (;;) {
@@ -93,7 +116,11 @@ async function findConfig(from) {
  * Resolves the configuration for a run. Paths come back absolute, so nothing
  * downstream has to know where the config file was found.
  */
-export async function loadConfig({ cwd = process.cwd() } = {}) {
+export async function loadConfig({
+  cwd = process.cwd(),
+}: {
+  cwd?: string;
+} = {}): Promise<ResolvedConfig> {
   const found = await findConfig(cwd);
   const root = found?.root ?? (await findProjectRoot(cwd));
   const file = found?.config ?? {};

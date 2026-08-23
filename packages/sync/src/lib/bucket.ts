@@ -1,13 +1,40 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { CATALOG_FILE, contentTypeFor, METADATA_FILE } from "@bookshelf/core";
-import { pool, retry } from "./util.mjs";
+import {
+  CATALOG_FILE,
+  type Catalog,
+  contentTypeFor,
+  METADATA_FILE,
+  type StorageAdmin,
+} from "@bookshelf/core";
+import { messageOf, pool, retry } from "./util.js";
+
+/** One file in the built tree, and where it is going. */
+type Upload = { key: string; file: string; contentType: string };
+
+/** What a publish did. */
+export type SyncResult = {
+  uploaded: number;
+  removed: number;
+  failed: number;
+  /**
+   * Whether the removals were exact. False where the provider cannot enumerate
+   * its destination, so what was cleared came from the last published catalog
+   * rather than from looking.
+   */
+  exact: boolean;
+};
+
+export type SyncOptions = {
+  force?: boolean;
+  log: (message: string) => void;
+};
 
 /** Used when a provider does not state its own safe write concurrency. */
 const DEFAULT_CONCURRENCY = 4;
 
 /** Every file in the built tree, as the keys they will occupy. */
-async function localKeys(outDir) {
+async function localKeys(outDir: string): Promise<Upload[]> {
   const entries = await readdir(outDir, {
     withFileTypes: true,
     recursive: true,
@@ -34,7 +61,9 @@ async function localKeys(outDir) {
  * exact for a destination only this script manages — and blind to anything put
  * there by other means.
  */
-async function remoteKeys(admin) {
+async function remoteKeys(
+  admin: StorageAdmin,
+): Promise<{ keys: string[]; exact: boolean }> {
   if (admin.list) {
     return { keys: await admin.list(), exact: true };
   }
@@ -43,7 +72,7 @@ async function remoteKeys(admin) {
   if (!raw) return { keys: [], exact: false };
 
   try {
-    const catalog = JSON.parse(new TextDecoder().decode(raw));
+    const catalog = JSON.parse(new TextDecoder().decode(raw)) as Catalog;
     const keys = [CATALOG_FILE];
     for (const book of catalog.books ?? []) {
       keys.push(`${book.id}/${METADATA_FILE}`);
@@ -70,12 +99,16 @@ async function remoteKeys(admin) {
  * destination does; one that cannot falls back to deleting the keys it knows
  * about, and says so rather than implying more than it did.
  */
-export async function syncLibrary(admin, outDir, { force = false, log }) {
+export async function syncLibrary(
+  admin: StorageAdmin,
+  outDir: string,
+  { force = false, log }: SyncOptions,
+): Promise<SyncResult> {
   const concurrency = admin.concurrency ?? DEFAULT_CONCURRENCY;
   const desired = await localKeys(outDir);
 
   let removed = 0;
-  let exact;
+  let exact: boolean;
 
   if (force && admin.removeAll) {
     log(`Clearing everything in ${admin.name}…`);
@@ -96,8 +129,8 @@ export async function syncLibrary(admin, outDir, { force = false, log }) {
           : `Removing ${stale.length} objects no longer in the library…`,
       );
       await pool(stale, concurrency, (key) =>
-        retry(() => admin.remove(key)).catch((error) => {
-          log(`  warn   could not delete ${key} (${error.message.trim()})`);
+        retry(() => admin.remove(key)).catch((error: unknown) => {
+          log(`  warn   could not delete ${key} (${messageOf(error).trim()})`);
         }),
       );
     }
@@ -114,7 +147,7 @@ export async function syncLibrary(admin, outDir, { force = false, log }) {
       if (done % 25 === 0) log(`  ${done}/${desired.length}`);
     } catch (error) {
       failed++;
-      log(`  fail   ${entry.key} (${error.message.trim().split("\n")[0]})`);
+      log(`  fail   ${entry.key} (${messageOf(error).trim().split("\n")[0]})`);
     }
   });
 
