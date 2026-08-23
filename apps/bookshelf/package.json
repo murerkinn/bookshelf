@@ -21,7 +21,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./test/lib/alias.mjs --test \"test/**/*.test.ts\"",
     "bundle": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -40,6 +41,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@bookshelf/fixtures": "*",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",

@@ -138,6 +138,7 @@ npm run build        # build every workspace
 npm run check-types  # typecheck every workspace
 npm run preview      # build + run the Worker locally
 npm run deploy       # build + deploy to Cloudflare Workers
+npm test             # the test suite
 npm run lint         # biome, across the repo
 ```
 
@@ -168,8 +169,9 @@ editing `wrangler.jsonc`.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: Node 24, `npm
-install`, `npm run lint` and `npm run check-types` before you push, and there
-are no tests yet — so say what you ran.
+install`, and `npm run lint`, `npm run check-types` and `npm test` before you
+push. The tests reach the packages and the app's service layer but not its
+pages, so say what you ran as well.
 
 Storage providers are the extension point and do not have to live here: a
 package published by anyone can be installed and named in the config.

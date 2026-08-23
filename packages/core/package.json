@@ -36,10 +36,12 @@
   "scripts": {
     "build": "tsc --build",
     "check-types": "tsc --build",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "node --test \"test/**/*.test.ts\""
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "@types/node": "^24"
+    "@bookshelf/fixtures": "*",
+    "@types/node": "^24",
+    "typescript": "^7.0.2"
   }
 }

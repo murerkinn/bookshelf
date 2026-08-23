@@ -18,6 +18,10 @@ library/           upload tree out)  both gitignored
 
 A Turborepo workspace, so `packages/core` is built before anything that imports
 it and the app and the CLI can never drift apart on what a library looks like.
+Every package is TypeScript compiled by `tsc`; the app is compiled by Next.
+Tests live beside the code they exercise, as `test/*.test.ts` in each package,
+and Node runs them from source by stripping the types. The `.mjs` that is left
+is `tools/`, which is scripts, and one resolver hook the app's tests load.
 
 ## Services and ports
 

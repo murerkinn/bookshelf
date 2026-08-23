@@ -43,6 +43,7 @@
     "demo:gutenberg": "node tools/gutenberg.mjs",
     "deploy": "turbo run deploy --log-prefix=none --",
     "preview": "turbo run preview --log-prefix=none --",
+    "test": "turbo run test",
     "lint": "biome check",
     "format": "biome format --write"
   },

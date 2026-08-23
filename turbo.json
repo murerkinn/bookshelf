@@ -36,6 +36,14 @@
       "dependsOn": ["build"],
       "cache": false
     },
+    // Each package runs its own tests, against the dist its build produces —
+    // so a change to one package re-runs only its own, and they run in
+    // parallel. The app's reach into its `src` directly, which is why that one
+    // depends on nothing being built.
+    "test": {
+      "dependsOn": ["build", "^build"],
+      "outputs": []
+    },
     "preview": {
       "dependsOn": ["^build"],
       "cache": false,

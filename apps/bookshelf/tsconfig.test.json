@@ -1,0 +1,16 @@
+{
+  // The tests are kept out of tsconfig.json so `next build` does not compile
+  // them into the app. This is what checks them instead: the same options and
+  // the same `@/` paths, with `test` no longer excluded.
+  //
+  // `include` is deliberately not overridden — the base already reaches every
+  // `.ts` under the app, including the types Next generates for its routes,
+  // and re-listing them here is how those go missing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "incremental": false
+  },
+  "exclude": ["node_modules"]
+}

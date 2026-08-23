@@ -28,6 +28,7 @@
     "build": "tsc --build",
     "check-types": "tsc --build",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "node --test \"test/**/*.test.ts\"",
     "sync": "node ./dist/sync.js"
   },
   "dependencies": {
@@ -66,6 +67,7 @@
     }
   },
   "devDependencies": {
+    "@bookshelf/fixtures": "*",
     "@types/node": "^24",
     "typescript": "^7.0.2"
   }

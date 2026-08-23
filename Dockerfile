@@ -13,6 +13,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/provider-fs/package.json packages/provider-fs/
 COPY packages/provider-r2/package.json packages/provider-r2/
 COPY packages/sync/package.json packages/sync/
+COPY packages/fixtures/package.json packages/fixtures/
 RUN npm ci
 
 FROM deps AS build
