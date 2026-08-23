@@ -28,6 +28,15 @@ export {
   readOnlyStorage,
   writableStorage,
 } from "./provider.js";
+export type { ByteRange, RangeRequest } from "./range.js";
+export {
+  clampRange,
+  contentRange,
+  ifRangeMatches,
+  normaliseEtag,
+  parseByteRange,
+  unsatisfiedRange,
+} from "./range.js";
 export type {
   BookProgress,
   Profile,

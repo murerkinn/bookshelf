@@ -17,6 +17,8 @@
  * that suits them.
  */
 
+import type { ByteRange } from "./range.js";
+
 export type StoredObject = {
   key: string;
   size: number;
@@ -33,6 +35,20 @@ export type StoredContent = {
    * which lets the caller answer 304 without transferring anything.
    */
   body: ReadableStream<Uint8Array> | null;
+  /**
+   * Which bytes {@link StoredContent.body} holds, when it is not all of them.
+   *
+   * Set only by a provider that honoured a requested range, and absent
+   * otherwise — including when a range was asked for and the provider served
+   * the whole object anyway, which HTTP allows and which a provider written
+   * before ranges existed does by simply ignoring the option. Callers read
+   * this rather than their own request, so declining a range degrades to a
+   * complete answer instead of to a 206 that misdescribes its own body.
+   *
+   * {@link StoredObject.size} stays the size of the whole object either way,
+   * because that is what a `Content-Range` has to name.
+   */
+  range?: ByteRange;
 };
 
 /**
@@ -46,10 +62,17 @@ export interface Storage {
   /** Metadata only. Null if the object does not exist. */
   head(key: string): Promise<StoredObject | null>;
 
-  /** Streams an object, optionally skipping the body when the ETag matches. */
+  /**
+   * Streams an object, or some of it.
+   *
+   * `ifNoneMatch` lets the provider skip the body when the caller already has
+   * the current version. `range` asks for a slice, and is a request rather
+   * than an instruction: a provider may serve the whole object instead, and
+   * says which it did through {@link StoredContent.range}.
+   */
   read(
     key: string,
-    options?: { ifNoneMatch?: string },
+    options?: { ifNoneMatch?: string; range?: ByteRange },
   ): Promise<StoredContent | null>;
 
   /** Reads a whole object into memory. For small objects: catalogs, metadata. */
