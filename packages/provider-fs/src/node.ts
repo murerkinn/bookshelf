@@ -15,8 +15,11 @@ import {
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
+  type ByteRange,
+  clampRange,
   contentTypeFor,
   isStateKey,
+  normaliseEtag,
   STATE_PREFIX,
   type StorageAdmin,
   type StoredContent,
@@ -46,11 +49,6 @@ function resolveKey(root: string, key: string): string | null {
   if (!target.startsWith(prefix)) return null;
 
   return target;
-}
-
-/** Bare entity tag, with any weak marker and quotes removed. */
-function normaliseEtag(etag: string): string {
-  return etag.trim().replace(/^W\//, "").replace(/"/g, "");
 }
 
 /**
@@ -93,7 +91,7 @@ class FsStorage implements WritableStorage {
 
   async read(
     key: string,
-    options?: { ifNoneMatch?: string },
+    options?: { ifNoneMatch?: string; range?: ByteRange },
   ): Promise<StoredContent | null> {
     const file = resolveKey(this.root, key);
     if (!file) return null;
@@ -110,11 +108,25 @@ class FsStorage implements WritableStorage {
       return { object, body: null };
     }
 
+    const range = options?.range
+      ? clampRange(options.range, stats.size)
+      : undefined;
+    // Asked for bytes this file does not have. No body, so the caller answers
+    // 416 rather than streaming zero bytes as though they were the range.
+    if (options?.range && !range) return { object, body: null };
+
     return {
       object,
       body: Readable.toWeb(
-        createReadStream(file),
+        // `end` is inclusive, as it is in a `Content-Range`.
+        range
+          ? createReadStream(file, {
+              start: range.offset,
+              end: range.offset + range.length - 1,
+            })
+          : createReadStream(file),
       ) as ReadableStream<Uint8Array>,
+      ...(range ? { range } : {}),
     };
   }
 

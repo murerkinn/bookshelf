@@ -31,6 +31,7 @@ run on a machine that has one.
 | | `r2` | `fs` |
 | --- | --- | --- |
 | read | Worker binding | `node:fs` |
+| ranged read | binding `range` | `createReadStream` bounds |
 | publish | wrangler CLI | copies, hard-linked where it can |
 | `create` | `wrangler r2 bucket create` | `mkdir -p` |
 | `list` | — | walks the directory |
@@ -42,6 +43,31 @@ run on a machine that has one.
 in what their APIs offer, and the alternative to optionality is a provider that
 lies. The two shipped here differ in exactly that way, which is the point of
 having two.
+
+## Serving part of an object
+
+`read` takes an optional `range`, and it is a request rather than an
+instruction. A provider that honours it sets `range` on what it returns, naming
+the bytes the body actually holds; one that ignores the option returns the whole
+object and sets nothing.
+
+That is what the download route reads to decide between `206` and `200`, and it
+means declining is safe: a provider written before ranges existed serves
+complete responses rather than partial ones mislabelled as complete. The
+alternative — trusting the request — turns any provider that does not implement
+ranges into one that lies about every body it sends.
+
+Two rules for a provider that does implement them:
+
+- **Clamp with `clampRange`.** The size the route measured and the object being
+  read are two separate reads, and republishing a book replaces the object at
+  the same key, so a range can be past the end by the time it is served. The
+  helper returns null when none of it can be answered, and a provider then
+  returns no body — which the route turns into a `416` naming the real length.
+- **Leave `size` alone.** It stays the size of the whole object even on a
+  partial read, because that is the number a `Content-Range` has to name. R2
+  works this way already; a provider that reports the length of the slice
+  instead will produce `Content-Range` headers that describe the wrong object.
 
 ## The two shipped here
 

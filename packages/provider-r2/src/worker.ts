@@ -1,7 +1,10 @@
-import type {
-  StoredContent,
-  StoredObject,
-  WritableStorage,
+import {
+  type ByteRange,
+  clampRange,
+  normaliseEtag,
+  type StoredContent,
+  type StoredObject,
+  type WritableStorage,
 } from "@bookshelf/core";
 
 /**
@@ -57,11 +60,6 @@ function describe(object: R2ObjectLike): StoredObject {
   };
 }
 
-/** Bare entity tag, with any weak marker and quotes removed. */
-function normaliseEtag(etag: string): string {
-  return etag.trim().replace(/^W\//, "").replace(/"/g, "");
-}
-
 class R2Storage implements WritableStorage {
   constructor(private readonly bucket: R2BucketLike) {}
 
@@ -72,23 +70,39 @@ class R2Storage implements WritableStorage {
 
   async read(
     key: string,
-    options?: { ifNoneMatch?: string },
+    options?: { ifNoneMatch?: string; range?: ByteRange },
   ): Promise<StoredContent | null> {
+    const range =
+      options?.range && options.range.length > 0 ? options.range : undefined;
+
     // A plain conditional object rather than the request's `Headers`: a Headers
     // instance cannot cross the RPC boundary of the binding proxy that
     // `next dev` runs behind.
+    const conditional = options?.ifNoneMatch
+      ? { onlyIf: { etagDoesNotMatch: normaliseEtag(options.ifNoneMatch) } }
+      : undefined;
+
     const object = await this.bucket.get(
       key,
-      options?.ifNoneMatch
-        ? { onlyIf: { etagDoesNotMatch: normaliseEtag(options.ifNoneMatch) } }
-        : undefined,
+      range ? { ...conditional, range } : conditional,
     );
     if (!object) return null;
 
+    const described = describe(object);
+
+    // What came back may be shorter than what was asked for, and the caller has
+    // to describe the bytes it actually has rather than the ones it wanted.
+    // `size` stays the whole object's, which is what a `Content-Range` names.
+    const served = range ? clampRange(range, described.size) : undefined;
+    // Asked for bytes this object does not have. No body, so the caller answers
+    // 416 rather than passing on whatever R2 made of an impossible range.
+    if (range && !served) return { object: described, body: null };
+
     return {
-      object: describe(object),
+      object: described,
       // R2 omits the body when the precondition matched.
       body: object.body ?? null,
+      ...(served ? { range: served } : {}),
     };
   }
 
