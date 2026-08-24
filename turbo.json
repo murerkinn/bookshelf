@@ -7,8 +7,17 @@
   // wrong provider, and nothing says so.
   "globalDependencies": ["bookshelf.config.json", "bookshelf.config.jsonc"],
   "tasks": {
+    // pdf.js fetches its worker, its CMaps, its standard fonts and its wasm
+    // over HTTP rather than importing them, so a bundler never sees them and
+    // something has to put them under `public/` before the app is served.
+    // Uncached because the script is idempotent and stamps the version it
+    // copied: a second run compares one file and exits, which is cheaper than
+    // restoring four megabytes from a cache.
+    "assets": {
+      "cache": false
+    },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "assets"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     // Bundling for workerd is a step past `next build`, and it shells out to
@@ -16,7 +25,7 @@
     // @bookshelf/core. Running it through Turborepo is what gets that package
     // built first; invoking the CLI directly does not.
     "bundle": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "assets"],
       "outputs": [".open-next/**"]
     },
     "check-types": {
@@ -26,7 +35,7 @@
       "dependsOn": ["build"]
     },
     "dev": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "assets"],
       "cache": false,
       "persistent": true
     },
@@ -45,12 +54,12 @@
       "outputs": []
     },
     "preview": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "assets"],
       "cache": false,
       "persistent": true
     },
     "deploy": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "assets"],
       "cache": false
     }
   }

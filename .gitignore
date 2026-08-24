@@ -61,3 +61,7 @@ next-env.d.ts
 # from them. Both are reproducible, so neither is checked in.
 /gutenberg/
 /demo-library/
+
+# pdf.js's runtime files, copied out of pdfjs-dist by the app's `assets` task
+# rather than vendored — see apps/bookshelf/scripts/pdfjs-assets.ts
+/apps/bookshelf/public/pdfjs/
