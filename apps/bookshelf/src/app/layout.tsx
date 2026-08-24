@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { OG_BASE, SITE_DESCRIPTION, SITE_NAME, siteOrigin } from "@/lib/site";
+import { siteOrigin } from "@/lib/origin";
+import { OG_BASE, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import "./globals.css";
 
 /**
