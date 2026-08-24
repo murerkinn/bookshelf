@@ -7,16 +7,13 @@ import { EpubReader } from "@/app/read/[...key]/epub-reader";
 import { PdfReader } from "@/app/read/[...key]/pdf-reader";
 import { State, StatePage } from "@/app/state";
 import { BUTTON_PRIMARY } from "@/app/ui";
+import { encodeKey } from "@/lib/http";
 import { extension } from "@/lib/media";
 import { OG_BASE } from "@/lib/site";
 import { bookKey } from "@/services/catalog";
 import { getServices } from "@/services/container";
 import { ifAvailable } from "@/services/errors";
 import { activeProfile } from "@/services/session";
-
-function encodeKey(key: string): string {
-  return key.split("/").map(encodeURIComponent).join("/");
-}
 
 /**
  * What a shared book link says about itself.

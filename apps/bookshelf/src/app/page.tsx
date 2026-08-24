@@ -5,6 +5,7 @@ import { ProfileMenu } from "@/app/profile-menu";
 import { SearchInput } from "@/app/search-input";
 import { State } from "@/app/state";
 import { BUTTON_PRIMARY, BUTTON_QUIET } from "@/app/ui";
+import { encodeKey } from "@/lib/http";
 import { placeholder, tint } from "@/lib/media";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
@@ -21,10 +22,6 @@ const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
-
-function encodeKey(key: string): string {
-  return key.split("/").map(encodeURIComponent).join("/");
-}
 
 function formatSize(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];

@@ -27,3 +27,15 @@ export function serviceUnavailable(error: unknown): Response {
     },
   });
 }
+
+/**
+ * A storage key as a URL path.
+ *
+ * Encoded segment by segment rather than whole, because the slashes between a
+ * book's folder and its files are path structure and have to survive — while
+ * everything a publisher put in a file name (spaces, ampersands, accents) must
+ * not.
+ */
+export function encodeKey(key: string): string {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
