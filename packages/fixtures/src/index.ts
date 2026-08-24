@@ -24,6 +24,7 @@ export {
   utf16,
   xmpPacket,
 } from "./pdf.js";
+export { filler, PLACEHOLDER, SENTENCES } from "./prose.js";
 export type { DemoBook } from "./shelf.js";
 export { BOOKS, writeBooks } from "./shelf.js";
 export type { ZipEntryInput, ZipOptions } from "./zip.js";
