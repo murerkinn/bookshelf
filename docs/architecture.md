@@ -175,6 +175,35 @@ and say whether the library can be written to.
 
 See [reading in the browser](reader.md) for what each reader does with that.
 
+## The catalog other readers browse
+
+```
+apps/bookshelf/src/app/opds/[[...path]]/route.ts   the whole route
+apps/bookshelf/src/lib/opds/
+  feed.ts         the model — shaped after OPDS 2.0, because that is the more
+                  general of the two versions and leaves Atom as the one
+                  translation step rather than a second model
+  browse.ts       the groupings: by author, by subject, by series
+  xml.ts          escaping, and the characters XML 1.0 cannot carry at all
+  atom.ts         OPDS 1.2, and the OpenSearch description document
+  json.ts         OPDS 2.0
+  serve.ts        the URL space, format negotiation, the ETag, the response
+```
+
+One route for the whole protocol, because the serializers already have to
+generate every URL in that space to write their links — declaring it a second
+time in the filesystem would be two copies that can drift.
+
+Nothing under `lib/opds/` imports `next/headers`. `serveOpds` takes the shelf it
+is serving and the origin to write links against, both as parameters, which is
+what puts every feed within reach of `test/opds.test.ts` — where they are parsed
+rather than pattern-matched. That constraint is also why `siteOrigin()` lives in
+`lib/origin.ts` rather than beside the site's name in `lib/site.ts`: one is
+request-scoped and the other is constants, and only the first needs a request
+around it.
+
+See [the OPDS catalog](opds.md) for what it serves and to whom.
+
 ## Pages that are not showing a shelf
 
 ```

@@ -339,6 +339,19 @@ format, language, author and the new `subjects`; fold diacritics through the
 first. Then pagination or a virtualized list, because the shelf's real limit
 today is the DOM rather than the catalog.
 
+"Date added" is the one of those that needs a field rather than a comparator.
+Nothing in `Book` records when a book arrived — `catalog.json` carries one
+`generatedAt` for the whole library, which is what **#13** dates every OPDS
+entry by for want of anything better. An `addedAt` written by
+`packages/sync/src/lib/build.ts`, preserved across republishes rather than
+stamped afresh, is a `CATALOG_VERSION` bump that pays for itself twice: this
+sort, and a "Recently added" feed in the catalog.
+
+`slugify` is also worth hoisting out of `build.ts` into `packages/core` while
+the diacritic folding is being written, since both want the same
+normalisation — and the OPDS catalog puts names in paths unslugged today
+partly because that helper was not reachable from the app.
+
 `CatalogService` holds the whole catalog in the isolate and reads it once a
 minute, which is right for hundreds of books and wrong for tens of thousands.
 When that becomes the binding constraint, the answer is a generated index —
@@ -388,20 +401,70 @@ this is closer to essential than to nice, and it is a contained piece of work.
 ## Later
 
 Interop, scale, and one change of shape — bigger, and each one arguably a
-project of its own.
+project of its own. **#13** is done; the rest are not.
 
-### 13. An OPDS feed
+### 13. An OPDS feed — **done**
 
-One route serving OPDS 1.2 (Atom) or 2.0 (JSON) turns the library into
-something KOReader, Moon+ Reader, Panels, Thorium and Calibre can all browse
-and download from directly. For anyone reading on e-ink hardware, this is worth
-more than every reader improvement above it, because the reader on that device
-is already better than a browser can be.
+The library was reachable by a browser and by nothing else. For anyone reading
+on e-ink hardware that was the wrong way round, because the reader on that
+device is already better than a browser can be.
 
-The catalog is already the right shape; it is a serialization plus paging,
-faceted by author and subject once **#9** produces those. It shares the
-authentication question with **#4** — OPDS clients do HTTP Basic, not an
-identity provider, which likely means scoped tokens.
+What landed — `/opds`, both versions, in `apps/bookshelf/src/lib/opds/`:
+
+- **OPDS 1.2 (Atom) and 2.0 (JSON) from one model.** `feed.ts` is shaped after
+  2.0, the more general of the two, which leaves `atom.ts` as a translation step
+  rather than a second model and `json.ts` as little more than dropping the
+  fields a book does not have. Both use the same
+  `http://opds-spec.org/acquisition/*` relations, so the projection from a book
+  to its links is written once. Which version a request gets is negotiated from
+  `Accept`, with `?format=` to force it — and a JSON feed stamps `format=json`
+  on every link to another feed, so a client that sends a wildcard `Accept` on
+  its next request is not handed Atom halfway through browsing.
+- **A navigation root with browse axes**, not one flat list: all books, by
+  author, by subject, by series, each with a count, and an axis nothing is filed
+  under is not offered at all. The groupings in `browse.ts` are `Map`
+  operations over the array the catalog already holds in the isolate, so they
+  needed none of the generated index **#9** will want — which is the one thing
+  this entry expected to depend on and did not.
+- **Search**, reusing `catalog.search()` rather than restating what a query
+  matches. That predicate moved out of `CatalogService` as `searchBooks` so the
+  shelf and the feed cannot disagree. 1.2 gets an OpenSearch description
+  document, 2.0 the templated link it requires, which is why `/opds/books`
+  answers to `query` as well as `q`.
+- **Paging** at fifty to a page, `first`/`previous`/`next`/`last`, the query
+  carried along, and page one as the feed itself rather than `?page=1`.
+- **A weak ETag over the catalog date, the URL and the format** rather than over
+  the body — so a client refreshing a feed it already holds gets a 304 without
+  the server building the feed to find out.
+- **Names in paths, percent-encoded rather than slugged.** They round-trip
+  exactly, so nothing keeps a table mapping one back to the other, and two
+  authors who would slug the same stay two authors. `slugify` stayed private to
+  the sync tool; hoisting it to core is **#9**'s business.
+
+Two structural notes worth having written down. One route, `[[...path]]`, owns
+the whole space, because the serializers already have to generate every URL in
+it to write their links and a second copy in the filesystem is a copy that can
+drift. And nothing under `lib/opds/` reads `next/headers` — `serveOpds` takes
+the shelf and the origin as parameters — which is what puts every feed inside
+`test/opds.test.ts`, where each one is parsed rather than pattern-matched.
+`siteOrigin()` moved to `lib/origin.ts` to keep it that way: a request-scoped
+function and the site's name are different things, and only one of them needs a
+request around it.
+
+Two things it does **not** do, both deliberate:
+
+- **No authentication.** It ships as open as the rest of the app, because
+  `/download/` already serves every book with no credential. What the feed adds
+  is enumeration rather than access, which is worth saying out loud and is said
+  out loud, in `docs/opds.md` and in the README. **#4** is where this gets
+  fixed, and OPDS is the strongest argument for doing it: clients do HTTP Basic
+  rather than an identity provider, which is what points that entry at scoped
+  tokens.
+- **No "Recently added."** Every entry is dated by `catalog.json`'s
+  `generatedAt`, which the app had never read until now, because it is the only
+  timestamp a library has. Harmless for OPDS, where clients re-list rather than
+  diff. The fix is an `addedAt` on `Book`, folded into **#9** below, which wants
+  the same field to sort by.
 
 ### 14. More formats than EPUB and PDF
 

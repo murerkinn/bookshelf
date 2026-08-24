@@ -5,7 +5,9 @@
 A self-hosted library for the ebooks you already own. One server-rendered page
 lists them, filters them with a search box, serves downloads, and reads them in
 the browser — EPUB and PDF, each with its own reader — as a Cloudflare Worker
-over R2, or as a Node server over a directory on disk.
+over R2, or as a Node server over a directory on disk. It also serves itself as
+an [OPDS catalog](docs/opds.md), so KOReader on a Kobo browses the same library
+the browser does.
 
 ![The shelf: a searchable list of books with covers, a profile switcher, and a Continue button on the book being read](docs/shelf.webp)
 
@@ -124,8 +126,10 @@ It is enforced where the writing happens, not by hiding the forms, so posting
 the actions directly gets the same refusal.
 
 **There is no authentication.** Anyone who can reach the app can read and
-download the whole library, so put it on a network you trust or behind
-something that asks who is calling. See [Not done yet](#not-done-yet).
+download the whole library — through the shelf, and through the
+[OPDS catalog](docs/opds.md), which lists every book and every download link in
+a form built for machines. Put it on a network you trust or behind something
+that asks who is calling. See [Not done yet](#not-done-yet).
 
 ## Commands
 
@@ -157,6 +161,7 @@ editing `wrangler.jsonc`.
 | [Filesystem](docs/providers/fs.md) | running it on your own machine or a VPS |
 | [Profiles](docs/profiles.md) | who is reading, and where they got to |
 | [Reading in the browser](docs/reader.md) | how a chapter reaches the page |
+| [The OPDS catalog](docs/opds.md) | reading the library on a Kobo, a Kindle, or anything with an OPDS client |
 | [Architecture](docs/architecture.md) | ports, adapters, and the composition root |
 | [The demo library](docs/demo.md) | how the public shelf is built, and how to rebuild it |
 
@@ -164,7 +169,10 @@ editing `wrangler.jsonc`.
 
 - **There is no authentication.** Anyone with the URL can read and download the
   whole library — and pick any profile while doing it. Profiles are a way to
-  keep housemates' bookmarks apart, not a way to keep anyone out.
+  keep housemates' bookmarks apart, not a way to keep anyone out. The
+  [OPDS catalog](docs/opds.md) makes that library machine-enumerable as well as
+  readable: it grants no access the download links did not already, but it does
+  make reaching all of it considerably easier.
 - **Nothing is encrypted.** A library is published in the clear, so whoever
   holds the storage can read every book in it, and the object keys are
   slugified titles — a bucket listing names the shelf. With the filesystem
