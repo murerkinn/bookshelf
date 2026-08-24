@@ -4,6 +4,8 @@ import type { BookProgress } from "@bookshelf/core";
 import type { Book, NavItem, Rendition } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useReadingPosition } from "@/app/read/[...key]/position";
+import { readStored, writeStored } from "@/lib/local";
 
 type Mode = "single" | "double" | "scroll";
 
@@ -18,57 +20,9 @@ const MODE_STORAGE_KEY = "bookshelf:mode";
 /** How many spine items ahead to pull into the browser cache. */
 const PREFETCH_AHEAD = 2;
 
-/**
- * How long to wait before telling the server where you are.
- *
- * Every page turn moves the position, and a request per turn would cost a read
- * and a write of the progress file each time. Waiting for a pause collapses a
- * chapter's worth of turns into one write, and the browser copy means nothing
- * is at risk while it waits.
- */
-const SYNC_DEBOUNCE_MS = 4000;
-
-/** Where this browser remembers a profile's place in a book. */
-function progressKey(profileId: string, bookId: string): string {
-  return `bookshelf:progress:${profileId}:${bookId}`;
-}
-
 /** What the reader stored before positions were shared between devices. */
 function legacyProgressKey(bookKey: string): string {
   return `bookshelf:progress:${bookKey}`;
-}
-
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    // Private browsing — reading just starts from the beginning.
-    return null;
-  }
-}
-
-function writeStored(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Progress simply isn't kept.
-  }
-}
-
-function readLocal(key: string): BookProgress | null {
-  const raw = readStored(key);
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as BookProgress;
-    return typeof parsed?.updatedAt === "string" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLocal(key: string, progress: BookProgress): void {
-  writeStored(key, JSON.stringify(progress));
 }
 
 /** Table of contents entries nest; one flat list with indentation is enough. */
@@ -129,51 +83,28 @@ export function EpubReader({
   const [toc, setToc] = useState<{ item: NavItem; depth: number }[]>([]);
   const [mode, setMode] = useState<Mode>("double");
 
-  const storageKey = progressKey(profileId, bookId);
+  const legacy = useCallback(() => {
+    const raw = readStored(legacyProgressKey(bookKey));
+    if (!raw) return null;
+    return {
+      cfi: raw,
+      // Dated to the epoch so the library's copy wins the moment there is one,
+      // rather than a device's history outranking it forever.
+      updatedAt: new Date(0).toISOString(),
+    };
+  }, [bookKey]);
 
-  /** A position seen but not yet sent, and the timer that will send it. */
-  const pending = useRef<{ cfi?: string; href?: string } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const sync = useCallback(
-    (beacon: boolean) => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-      }
-
-      const position = pending.current;
-      if (!position || !canSync) return;
-      pending.current = null;
-
-      const body = JSON.stringify({ bookId, ...position });
-
-      // On the way out there is no time for a normal request to finish, and a
-      // beacon is the only kind the browser promises to deliver.
-      if (beacon && typeof navigator.sendBeacon === "function") {
-        navigator.sendBeacon(
-          "/api/progress",
-          new Blob([body], { type: "application/json" }),
-        );
-        return;
-      }
-
-      void fetch("/api/progress", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-        keepalive: true,
-      }).catch(() => {
-        // The browser copy is still correct; the next pause tries again.
-      });
-    },
-    [bookId, canSync],
-  );
+  const { ready, current, record } = useReadingPosition({
+    bookId,
+    profileId,
+    saved,
+    canSync,
+    legacy,
+  });
 
   // Read before the book is rendered, so it is only ever built once, for the
-  // layout the reader actually wants — and so the position is settled before
-  // anything is displayed.
-  const [restored, setRestored] = useState(false);
+  // layout the reader actually wants.
+  const [modeRestored, setModeRestored] = useState(false);
   useEffect(() => {
     const savedMode = readStored(MODE_STORAGE_KEY);
     if (
@@ -183,38 +114,10 @@ export function EpubReader({
     ) {
       setMode(savedMode);
     }
+    setModeRestored(true);
+  }, []);
 
-    // The library's copy and this browser's copy are reconciled once, into the
-    // browser's, so everything after this reads one place. Newest wins, which
-    // is right whichever device was last used — and means a reader that was
-    // offline does not lose its place to a stale server copy.
-    const local = readLocal(storageKey);
-    if (saved && (!local || saved.updatedAt > local.updatedAt)) {
-      writeLocal(storageKey, saved);
-    } else if (!local) {
-      const legacy = readStored(legacyProgressKey(bookKey));
-      if (legacy) {
-        writeLocal(storageKey, {
-          cfi: legacy,
-          // Dated to the epoch so the library's copy wins the moment there
-          // is one, rather than a device's history outranking it forever.
-          updatedAt: new Date(0).toISOString(),
-        });
-      }
-    }
-
-    setRestored(true);
-  }, [storageKey, bookKey, saved]);
-
-  // Leaving the page is the one moment a debounce cannot be allowed to lose.
-  useEffect(() => {
-    const flush = () => sync(true);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      flush();
-    };
-  }, [sync]);
+  const restored = modeRestored && ready;
 
   useEffect(() => {
     const element = container.current;
@@ -286,22 +189,7 @@ export function EpubReader({
             setLabel(location.start?.href ?? "");
 
             if (location.start?.cfi) {
-              const position = {
-                cfi: location.start.cfi,
-                href: location.start.href,
-              };
-
-              // The browser first and without waiting, so the position is
-              // never at the mercy of the network; the library catches up
-              // once the reader pauses.
-              writeLocal(storageKey, {
-                ...position,
-                updatedAt: new Date().toISOString(),
-              });
-
-              pending.current = position;
-              if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => sync(false), SYNC_DEBOUNCE_MS);
+              record({ cfi: location.start.cfi, href: location.start.href });
             }
 
             prefetchAhead(opened, location.start?.index);
@@ -323,7 +211,7 @@ export function EpubReader({
         // `ready` resolves once the spine is parsed, which is what tells us
         // where the cover ends and the book begins.
         return opened.ready.then(() =>
-          view.display(readLocal(storageKey)?.cfi ?? firstReadableHref(opened)),
+          view.display(current()?.cfi ?? firstReadableHref(opened)),
         );
       })
       .then(() => {
@@ -346,7 +234,7 @@ export function EpubReader({
     // `mode` rebuilds the rendition: epub.js reflows far more reliably from a
     // fresh render than from a flow change applied to a live one, and the saved
     // position puts the reader straight back where it was.
-  }, [opfUrl, storageKey, mode, restored, sync]);
+  }, [opfUrl, mode, restored, current, record]);
 
   const turn = useCallback((direction: "prev" | "next") => {
     const view = rendition.current;
@@ -360,7 +248,7 @@ export function EpubReader({
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex-1">
         {/* Full width when paginated; a readable column when scrolling, since
             book CSS assumes a page rather than a 1440px browser window. */}
