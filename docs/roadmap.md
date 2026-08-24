@@ -10,7 +10,9 @@ is unfinished in a way that a library without annotations is not.
 
 ## Now
 
-The five things that leave a visible hole in what is already shipped.
+The five things that left a visible hole in what was already shipped. Four are
+done; **#4** is the one still open, and it is the one that decides whether an
+instance can be put where strangers can reach it.
 
 ### 1. Read metadata out of PDFs — **done**
 
@@ -46,34 +48,73 @@ with an empty user password — MD5 and RC4 by hand, since neither is in WebCryp
 — and it is worth doing only if publisher PDFs turn out to be a common case in
 practice. One file in the 37-PDF sample was encrypted, and it was a certificate.
 
-### 2. A real PDF reader
+### 2. A real PDF reader — **done**
 
-`apps/bookshelf/src/app/read/[...key]/page.tsx` hands anything that is not an
-EPUB to an `<iframe>` pointed at `/download/<key>?inline=1`. That works — the
-browser's viewer is good — but the whole of the reader's behaviour is lost with
-it: no saved position, so **Continue** never appears for a PDF; no table of
-contents; no layout choice; a full download before the first page; and on iOS
-Safari an inline PDF in an iframe renders one page and stops.
+`apps/bookshelf/src/app/read/[...key]/page.tsx` used to hand anything that was
+not an EPUB to an `<iframe>` pointed at `/download/<key>?inline=1`. The browser's
+viewer is good, but the whole of the reader's behaviour was lost with it: no
+saved position, so **Continue** never appeared for a PDF; no contents; no layout
+choice; a full download before the first page; and on iOS Safari an inline PDF in
+an iframe renders one page and stops.
 
-Add `pdf-reader.tsx` next to `epub-reader.tsx`, on `pdf.js`, and select on it in
-the same place the iframe is selected on now. The pieces that already exist and
-should be reused rather than rebuilt:
+What landed, on pdf.js, in `read/[...key]/`:
 
-- the debounced-write-plus-`sendBeacon` position sync from `epub-reader.tsx`,
-  which is the part with the subtle bits in it (browser copy first, newest-wins
-  reconciliation, flush on `pagehide`);
-- `ProgressService`, unchanged, once `BookProgress` in
-  `packages/core/src/state.ts` gains an optional `page?: number`. `cfi` and
-  `href` are EPUB-shaped; a page number is the PDF equivalent, and the type is
-  a union of position kinds rather than a second file. `STATE_VERSION` stays
-  where it is: a reader that meets a `page` it does not understand starts at
-  the beginning, which is the existing behaviour for an unknown book.
-- range reads, which **#3** has already landed — `pdf.js` asks for byte ranges
-  when the server says it may, and `/download` now says it may, which is what
-  turns a 40 MB PDF into a first page in a few hundred kilobytes.
+- **`position.ts`** — the part **#5** said was worth reusing rather than
+  rebuilding, now extracted from `epub-reader.tsx` and used by both: browser copy
+  first, newest-wins reconciliation on the way in, a four-second debounce out to
+  the library, and a `sendBeacon` flush on `pagehide`. Both readers went through
+  it before either was trusted with it.
+- **`pdf-reader.tsx`** — three layouts in the same vocabulary the EPUB reader
+  uses (two pages, one page, scroll), zoom with a capped automatic default,
+  paper/sepia/night, a page box that is somewhere to go as well as something to
+  read, keyboard and swipe, and a progress line.
+- **`pdf-page.tsx`** — one page. Every page is a box of the right shape whether
+  or not it has been drawn, so a five-hundred-page document has a real scrollbar
+  from the moment it opens and only the pages near the reader cost anything.
+  Drawing goes to an off-screen canvas and is blitted in, because assigning a
+  canvas's width clears it and a zoom would otherwise blank the page.
+- **`pdf-sidebar.tsx`** — contents and search, in a drawer. The plan here said
+  the outline should fill the same dropdown the EPUB reader uses; it should not.
+  A technical PDF's outline runs to hundreds of entries, which is a column of
+  text rather than a `<select>`, and search wants the same shape. The header and
+  the toolbar are still one idiom across both readers.
+- **`pdf-search.ts`** and the matching half of **`pdf-document.ts`** — **#12**,
+  arriving early because for a PDF it is contained: the text is already coming to
+  the browser to be drawn. Case and accents folded, whitespace collapsed, and an
+  offset map back to the original so an excerpt is shown as it was written and
+  cut at a word. Marked with `CSS.highlights`, which does not need the runs to be
+  split and so does not move the words inside them.
+- **`BookProgress`** in `packages/core/src/state.ts` grew an optional
+  `page?: number`, flat beside `cfi` and `href` rather than as a discriminated
+  union, so the file on disk is unchanged for every book already in a library.
+  `STATE_VERSION` did not move: a reader that meets a kind of position it does not
+  understand starts at the beginning, which is what it already did for a book
+  nobody had opened. The shelf needed no change at all — **Continue** is drawn
+  from a position existing, not from what kind it is.
+- **`scripts/pdfjs-assets.ts`** and an `assets` task — pdf.js asks for its
+  worker, its CMaps, its standard fonts and its wasm by URL at the moment it
+  needs them, which no bundler sees. Copied out of the package rather than
+  committed, and stamped with the version they came from so a second run is free.
+- Fixtures: **`bookPdf`** in `@bookshelf/fixtures`, which is a document rather
+  than the smallest file that exercises one quirk — pages with content streams,
+  fonts, an outline, and metadata in both of the places a PDF keeps it. The demo
+  shelf now has a PDF on it, so the other reader is one click from a screenshot
+  instead of reachable only by URL. Page text is WinAnsi-encoded, because a
+  `/WinAnsiEncoding` font reads a content stream a byte at a time and an em dash
+  written as UTF-8 is drawn as three characters.
 
-The outline (`getOutline()`) fills the same contents dropdown the EPUB reader
-uses, so the chrome in `page.tsx` stays one component rather than two.
+Ranges from **#3** are what make it worth having: `disableAutoFetch` off, and a
+40 MB book opens on a few 128 KB reads instead of on all of it. Verified in a
+browser against a 359-page document — ranged loading, text selection across
+runs, the outline, search, all three layouts, and a position that survives a
+reload and puts **Continue** on the shelf.
+
+What was deliberately left: page thumbnails, tap zones (a swipe works), and
+rotating a page that was scanned sideways. And one thing that cannot be helped —
+pdf.js opens with a request for the whole file which it aborts once it has read
+`Accept-Ranges` off the headers, because there is no way to tell it the length in
+advance. It shows in a network log as a cancelled request that transferred
+almost nothing.
 
 ### 3. Range requests on `/download` — **done**
 
@@ -216,6 +257,11 @@ Where the reading and browsing experience is thin rather than absent.
 
 ### 6. Typography and theme in the reader
 
+Half of this is done, on the PDF side: **#2** brought paper, sepia and night to
+`pdf-reader.tsx`, where a tint is a filter over the drawing because a PDF's page
+is a picture. An EPUB's chapter is markup, so it gets the better version of the
+same feature and none of the code.
+
 `epub-reader.tsx` offers three layouts and nothing else. Publisher CSS decides
 the typeface, the measure and the colours, which is why a book renders as black
 on white next to a shelf that follows the system theme.
@@ -230,6 +276,10 @@ Preferences belong next to `MODE_STORAGE_KEY`, per device rather than per
 profile: it is a property of the screen being read on.
 
 ### 7. Where you are in the book
+
+A PDF has this now — a page of a total, and a progress line along the bottom —
+because a page number is a position a document already knows. An EPUB has to be
+measured first, which is what the rest of this entry is about.
 
 The footer shows a spine href. `book.locations.generate()` gives a percentage
 through the book, a page count, and "N pages left in this chapter" — which is
@@ -276,7 +326,10 @@ sharded JSON, or D1 for an R2 deployment — behind the same
 
 ### 10. Reading on a phone
 
-The reader turns pages with two small buttons and the arrow keys. On a
+The PDF reader takes a swipe and the full set of keys; what it does not have is
+tap zones or an immersive mode, and the EPUB reader has none of it.
+
+The EPUB reader turns pages with two small buttons and the arrow keys. On a
 touchscreen that is most of what there is: no swipe, no tap zones, no way to
 reach the chrome without hitting a 32-pixel target.
 
@@ -300,6 +353,11 @@ browser and says so. Bookmarks first; highlights and notes are the same
 storage with a colour and a body.
 
 ### 12. Search inside a book
+
+Done for PDF, as part of **#2**: `pdf-search.ts` scans the document a page at a
+time, streams results in, and marks them with `CSS.highlights`. What remains is
+the EPUB half, and the folding and excerpt-cutting in `pdf-document.ts` is
+reusable rather than rewritten.
 
 `book.spine.each` plus `section.find(query)` gives full-text search across a
 book with no server involvement, at the cost of fetching each section once.

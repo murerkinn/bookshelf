@@ -23,6 +23,14 @@ Tests live beside the code they exercise, as `test/*.test.ts` in each package,
 and Node runs them from source by stripping the types. The `.mjs` that is left
 is `tools/`, which is scripts, and one resolver hook the app's tests load.
 
+One task in the graph is neither a build nor a test. `assets` copies pdf.js's
+worker, CMaps, standard fonts and WebAssembly out of `pdfjs-dist` into the app's
+`public/`, because pdf.js asks for those by URL at the moment it needs them and
+no bundler ever sees the request. Everything that serves the app — `build`,
+`dev`, `bundle`, `preview`, `deploy` — depends on it. It is uncached on purpose:
+the script stamps the version it copied, so a second run compares one file and
+exits, which is cheaper than restoring four megabytes from a cache.
+
 ## Services and ports
 
 The app talks to interfaces, never to Cloudflare. Porting it means writing
@@ -126,6 +134,37 @@ One ZIP reader serves both sides because they differ only in where the bytes
 come from: the CLI holds a whole book in memory, the app pulls one chapter at a
 time out of storage. Decompression goes through `DecompressionStream` rather
 than `node:zlib`, which is what lets the same code run in workerd and in Node.
+
+## The readers
+
+```
+apps/bookshelf/src/app/read/[...key]/
+  page.tsx          picks a reader from the file's extension, and is the only
+                    place that knows there is more than one
+  position.ts       keeping a place: the browser's copy first, the library's
+                    after a pause, reconciled newest-wins on the way in. Shared,
+                    because only what a position *is* differs by format
+  epub-reader.tsx   epub.js, pointed at the package document
+  pdf-reader.tsx    pdf.js: layout, zoom, tint, and the chrome around a page
+  pdf-page.tsx      one page — a box of the right shape, drawn when it is near
+  pdf-sidebar.tsx   contents and search, which are both lists of places to go
+  pdf-search.ts     the scan, debounced and streamed
+  pdf-document.ts   every call into pdf.js that is not React: opening a
+                    document, its outline, its text, its text layer
+
+apps/bookshelf/src/lib/
+  local.ts          localStorage, for what belongs to a device rather than to a
+                    profile: a layout, a zoom, a tint, and the browser's copy of
+                    a position
+```
+
+Both readers are client components and both load their library with a dynamic
+`import()`, because epub.js and pdf.js each reach for `window` as they
+initialise and neither survives the server render. The server's part is small
+and the same either way: resolve who is reading, hand over their saved position,
+and say whether the library can be written to.
+
+See [reading in the browser](reader.md) for what each reader does with that.
 
 ## Pages that are not showing a shelf
 
