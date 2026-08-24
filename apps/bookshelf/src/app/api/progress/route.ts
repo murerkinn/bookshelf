@@ -5,9 +5,26 @@ import { activeProfile } from "@/services/session";
 /** A CFI for a deep position is a couple of hundred characters at most. */
 const MAX_FIELD_LENGTH = 1024;
 
+/**
+ * Higher than any real book, and low enough that the stored number stays a
+ * number. The reader clamps a page to the document it actually opened, so this
+ * only has to keep nonsense out of the file rather than be exact.
+ */
+const MAX_PAGE = 1_000_000;
+
 function field(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0
     ? value.slice(0, MAX_FIELD_LENGTH)
+    : undefined;
+}
+
+/** A page, counting from one — so zero is not one, and neither is a fraction. */
+function pageNumber(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= MAX_PAGE
+    ? value
     : undefined;
 }
 
@@ -49,6 +66,7 @@ export async function POST(request: Request) {
     const saved = await progress.save(profile.id, bookId, {
       cfi: field(body.cfi),
       href: field(body.href),
+      page: pageNumber(body.page),
     });
 
     return Response.json({ saved }, { status: saved ? 200 : 202 });

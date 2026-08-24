@@ -58,12 +58,25 @@ export type Profiles = {
   profiles: Profile[];
 };
 
-/** Where one reader got to in one book. */
+/**
+ * Where one reader got to in one book.
+ *
+ * Every field but the timestamp is optional because a position means different
+ * things in different formats, and a book only ever has one of them: `cfi` and
+ * `href` are EPUB-shaped, `page` is what a PDF has instead. They are kept flat
+ * rather than as a discriminated union so that the file on disk is unchanged
+ * for every book already in a library, and so that a reader meeting a kind of
+ * position it does not understand ignores it and starts at the beginning —
+ * which is already what it does for a book nobody has opened. That is why
+ * {@link STATE_VERSION} does not move when a kind is added.
+ */
 export type BookProgress = {
   /** An EPUB CFI: the position, precise to the character. */
   cfi?: string;
   /** The spine href it falls in, for showing where someone is without parsing. */
   href?: string;
+  /** A PDF page, counting from one. */
+  page?: number;
   /** ISO 8601. Decides which device wins when two have been reading. */
   updatedAt: string;
 };

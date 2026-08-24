@@ -12,6 +12,14 @@ import { reading } from "@/services/errors";
 export type { BookProgress } from "@bookshelf/core";
 
 /**
+ * A position as a reader reports it: everything {@link BookProgress} holds
+ * except the timestamp, which is the library's to set. Derived rather than
+ * restated so that a new kind of position reaches this service by adding one
+ * field to one type.
+ */
+export type ReadingPosition = Omit<BookProgress, "updatedAt">;
+
+/**
  * How far each profile got in each book.
  *
  * One object per profile rather than one per book: a page turn costs a read
@@ -85,7 +93,7 @@ export class ProgressService {
   async save(
     profileId: string,
     bookId: string,
-    position: { cfi?: string; href?: string },
+    position: ReadingPosition,
   ): Promise<boolean> {
     const target = writableStorage(this.storage);
     if (!target) return false;
@@ -97,9 +105,12 @@ export class ProgressService {
       return false;
     }
 
+    // Only the fields that were given, so a format's position is stored in the
+    // shape that format has rather than padded out with empty ones.
     books[bookId] = {
       ...(position.cfi ? { cfi: position.cfi } : {}),
       ...(position.href ? { href: position.href } : {}),
+      ...(position.page ? { page: position.page } : {}),
       updatedAt: new Date().toISOString(),
     };
 

@@ -237,3 +237,46 @@ test("a write that does not land is reported, not assumed", async () => {
   library.storage.write = write;
   assert.equal(library.has(progressFile("murat")), false);
 });
+
+test("a page is a position too, and only the fields given are stored", async () => {
+  const library = memoryStorage({});
+  const progress = new ProgressService(library.storage);
+
+  await progress.save("murat", "a-pdf", { page: 240 });
+
+  const saved = must(await progress.get("murat", "a-pdf"), "a position");
+  assert.equal(saved.page, 240);
+  // A PDF has no CFI and no spine href, and a stored position that invented
+  // them would be a position the reader has to second-guess.
+  assert.equal("cfi" in saved, false);
+  assert.equal("href" in saved, false);
+});
+
+test("a book read in one format keeps one position, whichever kind it is", async () => {
+  const library = memoryStorage({});
+  const progress = new ProgressService(library.storage);
+
+  await progress.save("murat", "a-book", { cfi: "epubcfi(/6/4!/4/2)" });
+  await progress.save("murat", "a-book", { page: 12 });
+
+  // The file holds one position per book, so the newer kind replaces the older
+  // one rather than sitting beside it — which is what stops a reader that
+  // understands both from having to choose.
+  const saved = must(await progress.get("murat", "a-book"));
+  assert.equal(saved.page, 12);
+  assert.equal("cfi" in saved, false);
+});
+
+test("positions of either kind live in one file, so the shelf reads it once", async () => {
+  const library = memoryStorage({});
+  const progress = new ProgressService(library.storage);
+
+  await progress.save("murat", "an-epub", { cfi: "epubcfi(/6/4!/4/2)" });
+  await progress.save("murat", "a-pdf", { page: 7 });
+
+  const all = await progress.all("murat");
+  assert.deepEqual(Object.keys(all).sort(), ["a-pdf", "an-epub"]);
+  // Which is what makes Continue appear on a PDF with no change to the shelf.
+  assert.equal(all["a-pdf"].page, 7);
+  assert.equal(all["an-epub"].cfi, "epubcfi(/6/4!/4/2)");
+});
