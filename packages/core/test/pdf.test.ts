@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bytesSource, pdfDate, readPdfMetadata } from "@bookshelf/core";
 import {
+  bookPdf,
   brokenXrefPdf,
   classicPdf,
   literal,
@@ -9,6 +10,7 @@ import {
   pdfDocEncoded,
   shiftedPdf,
   utf16,
+  winAnsi,
 } from "@bookshelf/fixtures";
 
 function read(bytes) {
@@ -131,4 +133,53 @@ test("turns a PDF date into ISO 8601, at whatever precision it was given", () =>
   assert.equal(pdfDate("D:20110217203831+01"), "2011-02-17T20:38:31+01:00");
   assert.equal(pdfDate("nonsense"), null);
   assert.equal(pdfDate(""), null);
+});
+
+test("a whole generated book is a document a reader can open", async () => {
+  // The other fixtures here are the smallest file that exercises one structural
+  // quirk. This one is a document: pages with content streams on them, fonts,
+  // an outline, and metadata in both of the places a PDF keeps it. What is being
+  // checked is that a file built to be *rendered* is still a file this reader
+  // can take apart — the two halves came from different requirements and only
+  // agree by construction.
+  const pdf = bookPdf({
+    title: "On the Origin of Species",
+    authors: ["Charles Darwin"],
+    publisher: "John Murray",
+    published: "1859",
+    subjects: ["Science", "Biology"],
+    description: "Variation under domestication.",
+    chapters: 3,
+  });
+
+  const document = await read(pdf);
+
+  // The information dictionary, for what it can hold.
+  assert.equal(document.info.Title, "On the Origin of Species");
+  assert.equal(document.info.Author, "Charles Darwin");
+  // `/Producer` is the program, not the publisher, which is why the publisher
+  // has to come out of the other half.
+  assert.equal(document.info.Producer, "Bookshelf fixtures");
+
+  // And XMP, for what the dictionary has no room for.
+  assert.ok(document.xmp, "an XMP packet");
+  assert.match(document.xmp, /<dc:publisher>/);
+  assert.match(document.xmp, /John Murray/);
+
+  // A title page plus three chapters of several pages each.
+  assert.ok(document.pages > 4, `${document.pages} pages`);
+  assert.equal(document.encrypted, false);
+});
+
+test("a book's page text is written in the encoding its font reads", () => {
+  // A `/WinAnsiEncoding` font reads a content stream one byte at a time. An em
+  // dash written as its three UTF-8 bytes is drawn as three characters, which
+  // is a fixture that does not say what its own source says.
+  assert.equal(winAnsi("plain ascii"), "(plain ascii)");
+  assert.equal(winAnsi("a — dash"), "(a \\227 dash)");
+  assert.equal(winAnsi("café"), "(caf\\351)");
+  // The two characters that would end the string early.
+  assert.equal(winAnsi("a (b) c"), "(a \\(b\\) c)");
+  // Nothing WinAnsi can say, said as nothing rather than as mojibake.
+  assert.equal(winAnsi("中"), "(?)");
 });

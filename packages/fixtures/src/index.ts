@@ -13,8 +13,9 @@
  */
 export type { BookSpec, Rgb } from "./epub.js";
 export { coverArt, epub, png } from "./epub.js";
-export type { BytesLike, PdfSpec } from "./pdf.js";
+export type { BookPdfSpec, BytesLike, PdfSpec } from "./pdf.js";
 export {
+  bookPdf,
   brokenXrefPdf,
   classicPdf,
   literal,
@@ -22,6 +23,7 @@ export {
   pdfDocEncoded,
   shiftedPdf,
   utf16,
+  winAnsi,
   xmpPacket,
 } from "./pdf.js";
 export { filler, PLACEHOLDER, SENTENCES } from "./prose.js";
