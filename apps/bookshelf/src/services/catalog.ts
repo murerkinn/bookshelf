@@ -180,17 +180,27 @@ export class CatalogService {
   }
 
   async search(query: string): Promise<Book[]> {
-    const books = await this.all();
-    const needle = query.trim().toLowerCase();
-    if (!needle) return books;
-
-    return books.filter((book) =>
-      [book.title, book.authors.join(" "), book.publisher ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
-    );
+    return searchBooks(await this.all(), query);
   }
+}
+
+/**
+ * What a query matches, over books already in hand.
+ *
+ * Split out of the service because the shelf is not the only thing that
+ * searches — the OPDS catalog does too, and the two disagreeing about what a
+ * query means would be a bug nobody would think to look for.
+ */
+export function searchBooks(books: Book[], query: string): Book[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return books;
+
+  return books.filter((book) =>
+    [book.title, book.authors.join(" "), book.publisher ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle),
+  );
 }
 
 /** The format a reader should open, preferring what renders best. */
