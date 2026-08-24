@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type BookSpec, epub } from "./epub.js";
+import { bookPdf } from "./pdf.js";
 
 /**
  * A shelf of books that can be generated anywhere, for the demo and for tests.
@@ -10,11 +11,15 @@ import { type BookSpec, epub } from "./epub.js";
  * when the point is a screenshot. The prose inside is not theirs.
  *
  * `Meditations` deliberately has no cover, so the shelf's placeholder tile is
- * exercised too.
+ * exercised too, and `On the Origin of Species` is a PDF, so that the shelf a
+ * screenshot is taken of has both of the formats this app can read and the
+ * other reader is one click away rather than reachable only by URL.
  */
 export type DemoBook = BookSpec & {
   /** The file name to write it as, without an extension. */
   file: string;
+  /** EPUB unless said otherwise. */
+  format?: "epub" | "pdf";
 };
 
 export const BOOKS: DemoBook[] = [
@@ -92,6 +97,22 @@ export const BOOKS: DemoBook[] = [
     chapters: 4,
   },
   {
+    // Named the way a PDF that was downloaded from somewhere is named, rather
+    // than after its own title — which is what makes the sync tool take the
+    // title from the document's metadata. A file named after the title is
+    // rejected as an echo of the file name, by design: see `isJunkTitle`.
+    file: "darwin-origin-1859",
+    title: "On the Origin of Species",
+    authors: ["Charles Darwin"],
+    publisher: "John Murray",
+    published: "1859",
+    subjects: ["Science", "Biology", "Evolution"],
+    description:
+      "Variation under domestication, and the struggle for existence.",
+    format: "pdf",
+    chapters: 6,
+  },
+  {
     file: "meditations",
     title: "Meditations",
     authors: ["Marcus Aurelius"],
@@ -104,7 +125,7 @@ export const BOOKS: DemoBook[] = [
   },
 ];
 
-/** Writes the shelf into `directory` as EPUB files. Returns their paths. */
+/** Writes the shelf into `directory`. Returns the paths written. */
 export async function writeBooks(
   directory: string,
   books: readonly DemoBook[] = BOOKS,
@@ -113,8 +134,9 @@ export async function writeBooks(
 
   const written: string[] = [];
   for (const book of books) {
-    const file = path.join(directory, `${book.file}.epub`);
-    await writeFile(file, epub(book));
+    const pdf = book.format === "pdf";
+    const file = path.join(directory, `${book.file}.${pdf ? "pdf" : "epub"}`);
+    await writeFile(file, pdf ? bookPdf(book) : epub(book));
     written.push(file);
   }
   return written;

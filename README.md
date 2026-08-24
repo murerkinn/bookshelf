@@ -93,8 +93,9 @@ and a mismatch is reported rather than published through.
 
 ### A demo shelf
 
-No books to hand, or want something worth screenshotting? Eight generated
-public-domain titles, downloading nothing:
+No books to hand, or want something worth screenshotting? Nine generated
+public-domain titles — eight EPUBs and a PDF, so both readers are one click from
+the shelf — downloading nothing:
 
 ```bash
 npm run demo                 # writes them into books/
