@@ -19,3 +19,14 @@ export const BUTTON_QUIET =
 /** Text fields: a fill instead of a border, and the accent only on focus. */
 export const INPUT =
   "rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-shadow placeholder:text-tertiary focus:ring-2 focus:ring-accent";
+
+/**
+ * An icon button: the same fill as {@link BUTTON}, sized for a glyph rather
+ * than for words, and dimmed when there is nowhere for it to go.
+ */
+export const BUTTON_ROUND =
+  "rounded-full bg-fill p-2 transition-colors enabled:hover:bg-fill-hover disabled:opacity-40";
+
+/** A `<select>`: a fill instead of a border, like the text fields above. */
+export const SELECT =
+  "rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-colors hover:bg-fill-hover";

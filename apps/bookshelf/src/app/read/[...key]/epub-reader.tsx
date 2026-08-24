@@ -5,6 +5,7 @@ import type { Book, NavItem, Rendition } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReadingPosition } from "@/app/read/[...key]/position";
+import { BUTTON_ROUND, SELECT } from "@/app/ui";
 import { readStored, writeStored } from "@/lib/local";
 
 type Mode = "single" | "double" | "scroll";
@@ -279,7 +280,7 @@ export function EpubReader({
           type="button"
           onClick={() => turn("prev")}
           aria-label="Previous page"
-          className="rounded-full bg-fill p-2 transition-colors hover:bg-fill-hover"
+          className={BUTTON_ROUND}
         >
           <ChevronLeft aria-hidden="true" className="size-4" />
         </button>
@@ -293,7 +294,7 @@ export function EpubReader({
                 rendition.current?.display(event.target.value);
               }
             }}
-            className="min-w-0 flex-1 truncate rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-colors hover:bg-fill-hover"
+            className={`${SELECT} min-w-0 flex-1 truncate`}
           >
             <option value="">{label || "Contents"}</option>
             {toc.map(({ item, depth }) => (
@@ -312,7 +313,7 @@ export function EpubReader({
           aria-label="Reading layout"
           value={mode}
           onChange={(event) => changeMode(event.target.value as Mode)}
-          className="shrink-0 rounded-lg bg-fill px-3 py-1.5 text-sm outline-none transition-colors hover:bg-fill-hover"
+          className={`${SELECT} shrink-0`}
         >
           {MODES.map((option) => (
             <option key={option.value} value={option.value}>
@@ -325,7 +326,7 @@ export function EpubReader({
           type="button"
           onClick={() => turn("next")}
           aria-label="Next page"
-          className="rounded-full bg-fill p-2 transition-colors hover:bg-fill-hover"
+          className={BUTTON_ROUND}
         >
           <ChevronRight aria-hidden="true" className="size-4" />
         </button>
