@@ -46,6 +46,12 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
 
+  /* A sheet of paper on a desk: a hairline of contact and a wider, softer
+     cast below it. Two shadows rather than one, because a single blur reads as
+     a glow. */
+  --shadow-page:
+    0 1px 2px rgb(0 0 0 / 0.14), 0 10px 26px -12px rgb(0 0 0 / 0.24);
+
   /* The system stack: SF Pro on Apple devices, each platform's own face
      elsewhere. No font download, no layout shift. */
   --font-sans:
@@ -57,3 +63,96 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/*
+ * The PDF reader.
+ *
+ * A page is a canvas with a layer of invisible text over it. Both are sized by
+ * the box around them, so the rules here are only about what cannot be
+ * expressed in the markup: the tint, which is a filter over the drawing and
+ * must not touch the chrome around it, and the text layer, whose geometry pdf.js
+ * writes into style properties and expects CSS to have opinions about.
+ */
+
+.pdf-page {
+  background: var(--page-paper, #fff);
+  /* pdf.js sizes a layer with `round(down, …, var(--scale-round-x))`, so the
+     step it rounds to has to exist. One device pixel keeps a layer from
+     drifting half a pixel away from the canvas under it. */
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+
+/* The tint, applied to the drawing rather than to the page, so the placeholder
+   and the shadow stay as they are. */
+.pdf-page canvas {
+  filter: var(--page-filter, none);
+}
+
+/*
+ * The selectable text over a rendered page.
+ *
+ * Adapted from pdf.js's own viewer stylesheet, which is the specification for a
+ * layer it builds but does not style: every run is absolutely positioned, its
+ * size comes from `--total-scale-factor` multiplied by a per-run
+ * `--font-height`, and a run that was set at an angle or condensed carries its
+ * own `--rotate` and `--scale-x`. Getting this wrong does not look broken — it
+ * looks like text that selects a word to the left of the one clicked.
+ */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  text-align: initial;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+/* An image described for a screen reader is not text to select. */
+.textLayer span[role="img"] {
+  user-select: none;
+  cursor: default;
+}
+
+/* Selecting transparent text: the block has to be visible while the glyphs
+   stay invisible, since what is being read is the canvas underneath. */
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: transparent;
+}
+
+/* The search highlight is not here: `::highlight()` is dropped by the CSS
+   optimiser, so the reader inserts that rule itself — see `pdf-document.ts`. */

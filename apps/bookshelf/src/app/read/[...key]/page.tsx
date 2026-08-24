@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EpubReader } from "@/app/read/[...key]/epub-reader";
+import { PdfReader } from "@/app/read/[...key]/pdf-reader";
 import { State, StatePage } from "@/app/state";
 import { BUTTON_PRIMARY } from "@/app/ui";
 import { extension } from "@/lib/media";
@@ -86,8 +87,12 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-separator px-6 py-3">
+    // Exactly the viewport, and no taller: a reader scrolls inside itself, and
+    // a document that also scrolls would move the chrome off the screen. `dvh`
+    // rather than `vh` so that a phone's collapsing address bar is accounted
+    // for instead of hiding the bottom of the toolbar behind it.
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-separator px-6 py-3">
         <Link
           href="/"
           className="inline-flex shrink-0 items-center gap-0.5 text-sm font-medium text-secondary transition-colors hover:text-foreground"
@@ -108,9 +113,12 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
 
       {extension(fileKey) === "epub" ? (
         <EpubBody fileKey={fileKey} bookId={book.id} />
+      ) : extension(fileKey) === "pdf" ? (
+        <PdfBody fileKey={fileKey} bookId={book.id} />
       ) : (
-        // Anything else is handed to the browser's own viewer. PDFs render
-        // natively; the inline disposition is what stops it downloading.
+        // Anything else is handed to the browser's own viewer, which for a
+        // format this app has no reader for is better than nothing. The inline
+        // disposition is what stops it downloading instead of displaying.
         <iframe
           src={`/download/${encodeKey(fileKey)}?inline=1`}
           title={book.title}
@@ -153,6 +161,40 @@ async function EpubBody({
     <EpubReader
       opfUrl={`/book/${encodeKey(fileKey)}/${encodeKey(opfPath)}`}
       bookKey={fileKey}
+      bookId={bookId}
+      profileId={profile?.id ?? DEFAULT_PROFILE_ID}
+      saved={saved}
+      canSync={progress.writable && profile !== undefined}
+    />
+  );
+}
+
+/**
+ * The PDF reader, and what the server can tell it before it starts.
+ *
+ * Less than the EPUB reader needs: a PDF is one file that the reader fetches
+ * itself, in ranges, rather than an archive the app reads chapters out of. So
+ * there is nothing to resolve here and nothing to prove reachable — a library
+ * that has gone away is reported by `/download`, and the reader says so in the
+ * place the page would have been.
+ */
+async function PdfBody({
+  fileKey,
+  bookId,
+}: {
+  fileKey: string;
+  bookId: string;
+}) {
+  const { progress } = await getServices();
+
+  // Without a profile there is nobody to write a position for, so the reader is
+  // told not to try. Reading one is the only thing here that can fail.
+  const profile = await ifAvailable(() => activeProfile());
+  const saved = profile ? await progress.get(profile.id, bookId) : null;
+
+  return (
+    <PdfReader
+      url={`/download/${encodeKey(fileKey)}`}
       bookId={bookId}
       profileId={profile?.id ?? DEFAULT_PROFILE_ID}
       saved={saved}
