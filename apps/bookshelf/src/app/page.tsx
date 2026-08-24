@@ -7,6 +7,7 @@ import { State } from "@/app/state";
 import { BUTTON_PRIMARY, BUTTON_QUIET } from "@/app/ui";
 import { encodeKey } from "@/lib/http";
 import { placeholder, tint } from "@/lib/media";
+import { OPDS_ALTERNATE } from "@/lib/opds/feed";
 import { type Book, bookKey, readableFormat } from "@/services/catalog";
 import { getServices } from "@/services/container";
 import { ifAvailable } from "@/services/errors";
@@ -18,9 +19,12 @@ const COVER_CLASS = "h-15 w-10 shrink-0 rounded ring-1 ring-separator";
  * Searching filters through `?q=`, and every one of those is the same shelf
  * seen through a slot. The canonical points at the whole thing so a search
  * someone happened to share is not indexed as a page of its own.
+ *
+ * The catalog link is repeated from the layout because this replaces its
+ * `alternates` rather than adding to them — see {@link OPDS_ALTERNATE}.
  */
 export const metadata: Metadata = {
-  alternates: { canonical: "/" },
+  alternates: { canonical: "/", types: OPDS_ALTERNATE },
 };
 
 function formatSize(bytes: number): string {

@@ -7,6 +7,8 @@ import type { MetadataRoute } from "next";
  * hands out the insides of an archive one chapter at a time and `/download/`
  * whole books, neither of which is a page anyone should arrive on from a search
  * result, and both of which cost a read of object storage to refuse politely.
+ * `/opds/` is those same downloads enumerated, for the clients that ask for it
+ * by name — nothing a crawler should be walking.
  *
  * Pages that should stay out of an index say so with a `noindex` of their own
  * instead of being disallowed here, because a crawler has to be able to fetch a
@@ -19,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/book/", "/download/"],
+      disallow: ["/api/", "/book/", "/download/", "/opds"],
     },
   };
 }

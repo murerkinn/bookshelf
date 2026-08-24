@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OPDS_ALTERNATE } from "@/lib/opds/feed";
 import { siteOrigin } from "@/lib/origin";
 import { OG_BASE, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import "./globals.css";
@@ -16,6 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
     description: SITE_DESCRIPTION,
     applicationName: SITE_NAME,
+    // `metadataBase` above makes it absolute.
+    alternates: { types: OPDS_ALTERNATE },
     openGraph: {
       ...OG_BASE,
       type: "website",
