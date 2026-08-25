@@ -326,6 +326,36 @@ test("a book with no downloadable file is not listed", async () => {
   assert.equal(elements(document, "entry").length, 0);
 });
 
+test("a book with no downloadable file is not counted either", async () => {
+  // The same book, seen from the navigation rather than from a feed. A count
+  // that included it would send a client to an author, a subject and a series
+  // that each open on nothing.
+  const shelf: Shelf = {
+    books: [
+      book("empty", "Nothing To Read", {
+        formats: [],
+        authors: ["Ghost Writer"],
+        subjects: ["Vapourware"],
+        series: "Unwritten",
+      }),
+    ],
+  };
+
+  const counts = (document: Document) =>
+    links(document, "subsection").map((entry) =>
+      entry.getAttribute("thr:count"),
+    );
+
+  // Every book is one book fewer, and all three axes are empty, so an axis
+  // nothing can be filed under is not offered at all.
+  assert.deepEqual(counts(await parse(get(shelf, []))), ["0"]);
+
+  for (const axis of ["authors", "subjects", "series"]) {
+    assert.deepEqual(counts(await parse(get(shelf, [axis]))), []);
+    assert.equal(get(shelf, [axis, "Ghost Writer"]).status, 404);
+  }
+});
+
 test("what a publisher put in a title cannot break the feed", async () => {
   const shelf: Shelf = {
     books: [

@@ -84,6 +84,22 @@ function queryFor(query: URLSearchParams): string {
 }
 
 /**
+ * The books a feed can carry, which is not quite every book.
+ *
+ * An OPDS entry must hold at least one acquisition link, so a book with no
+ * downloadable file cannot be an entry at all — an entry without one is a feed
+ * a strict client rejects whole, in exchange for listing a book nobody could
+ * have opened.
+ *
+ * Dropped once, at the top of {@link serveOpds}, rather than where a feed is
+ * written: a book that cannot be listed must not be counted either, or file an
+ * author under a name whose feed would then open on nothing.
+ */
+function listable(books: Book[]): Book[] {
+  return books.filter((book) => book.formats.length > 0);
+}
+
+/**
  * A weak validator over what the answer depends on.
  *
  * The body is a pure function of the catalog, the URL and the format, so there
@@ -177,14 +193,7 @@ function paging(
   ];
 }
 
-/**
- * An acquisition feed: one page of books.
- *
- * Books with no downloadable file are dropped rather than listed, because an
- * OPDS entry must carry at least one acquisition link — an entry without one is
- * a feed a strict client rejects whole, in exchange for listing a book nobody
- * could have opened.
- */
+/** An acquisition feed: one page of books. */
 function acquisition(
   shelf: Shelf,
   request: OpdsRequest,
@@ -205,8 +214,7 @@ function acquisition(
   },
 ): OpdsFeed {
   const builder = urls(request.origin, format);
-  const listed = books.filter((book) => book.formats.length > 0);
-  const pages = pageCount(listed.length);
+  const pages = pageCount(books.length);
   // Clamped rather than refused: a client holding a stale page number should be
   // shown the end of the feed, not an empty one.
   const page = Math.min(pageFor(request.query), pages);
@@ -227,8 +235,8 @@ function acquisition(
       ),
       ...paging(builder, format, path, page, pages, query),
     ],
-    books: listed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    page: { number: page, size: PAGE_SIZE, total: listed.length },
+    books: books.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    page: { number: page, size: PAGE_SIZE, total: books.length },
   };
 }
 
@@ -315,9 +323,7 @@ function root(
       title: "All books",
       href: builder.feed("/opds/books"),
       kind: "acquisition",
-      // What the feed will actually list, which is not quite every book: one
-      // with no downloadable file cannot be an OPDS entry at all.
-      count: shelf.books.filter((book) => book.formats.length > 0).length,
+      count: shelf.books.length,
     },
   ];
 
@@ -405,8 +411,11 @@ function resolve(
  * every feed this can produce is reachable from a test without a Worker context
  * or `next/headers` around it.
  */
-export function serveOpds(shelf: Shelf, request: OpdsRequest): Response {
+export function serveOpds(published: Shelf, request: OpdsRequest): Response {
   const format = formatFor(request);
+  // Everything below serves this rather than what was published, so that every
+  // feed, every count and the validator are all speaking about the same books.
+  const shelf: Shelf = { ...published, books: listable(published.books) };
 
   const headers = new Headers({
     "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
