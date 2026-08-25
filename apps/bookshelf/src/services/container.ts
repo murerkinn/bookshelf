@@ -88,7 +88,16 @@ async function filesystemServices(): Promise<Services> {
     );
   }
 
-  const { createStorage } = await import("@bookshelf/provider-fs/node");
+  // Left for the runtime to resolve rather than bundled. This provider reads a
+  // directory named at startup, so its `open` and `createReadStream` calls take
+  // a path the bundler cannot know — and Turbopack answers that by tracing the
+  // whole project into the server output, `public/` and all, warning eight
+  // times on the way past. The directory is not a build input and never was;
+  // saying so is what the comment does. Nothing here changes for the Worker,
+  // which resolves the other provider and never reaches this branch.
+  const { createStorage } = await import(
+    /* turbopackIgnore: true */ "@bookshelf/provider-fs/node"
+  );
   return compose(createStorage({ directory }), new NoopCache());
 }
 
