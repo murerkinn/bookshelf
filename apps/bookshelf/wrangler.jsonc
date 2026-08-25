@@ -27,5 +27,23 @@
       "bucket_name": "books",
       "jurisdiction": "eu"
     }
+  ],
+  "ratelimits": [
+    {
+      "name": "R2_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    },
+    {
+      "name": "DOWNLOAD_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
   ]
 }

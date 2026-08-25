@@ -3,6 +3,8 @@
 // Runtime types generated with workerd@1.20260811.1 2025-09-27 nodejs_compat
 interface __BaseEnv_CloudflareEnv {
 	BOOKS: R2Bucket;
+	R2_RATE_LIMITER: RateLimit;
+	DOWNLOAD_RATE_LIMITER: RateLimit;
 	ASSETS: Fetcher;
 	WORKER_SELF_REFERENCE: Fetcher /* bookshelf */;
 }

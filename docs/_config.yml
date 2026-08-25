@@ -1,0 +1,20 @@
+title: Bookshelf
+description: A self-hosted library for the ebooks you already own
+theme: jekyll-theme-primer
+
+url: https://murerkinn.github.io
+baseurl: /bookshelf
+
+# Rewrites the `whatever.md` links these pages use for each other into site
+# URLs. Without it every cross-reference here works on GitHub's file view and
+# 404s on the published site, which is the worse half to get right.
+plugins:
+  - jekyll-relative-links
+  - jekyll-readme-index
+
+relative_links:
+  enabled: true
+  collections: false
+
+readme_index:
+  with_frontmatter: true

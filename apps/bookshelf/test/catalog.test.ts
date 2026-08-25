@@ -75,15 +75,15 @@ test("books come back sorted by title, whatever order they were published in", a
 test("search looks at title, authors and publisher", async () => {
   const { storage } = memoryStorage(
     library([
-      book("Essential Math", {
-        authors: ["Thomas Nield"],
-        publisher: "O'Reilly",
+      book("Tidewater Tables", {
+        authors: ["Marta Quill"],
+        publisher: "Mabry's Press",
       }),
-      book("Zero Trust Networks", {
-        authors: ["Evan Gilman"],
-        publisher: "O'Reilly",
+      book("Signal and Silt", {
+        authors: ["Piers Vale"],
+        publisher: "Mabry's Press",
       }),
-      book("Atomic Design", { authors: ["Brad Frost"], publisher: "Self" }),
+      book("Kettle Logic", { authors: ["Wren Ashby"], publisher: "Self" }),
     ]),
   );
   const catalog = new CatalogService(storage, nullCache());
@@ -91,14 +91,15 @@ test("search looks at title, authors and publisher", async () => {
   const titles = async (query: string) =>
     (await catalog.search(query)).map((b) => b.title);
 
-  assert.deepEqual(await titles("essential"), ["Essential Math"]);
-  assert.deepEqual(await titles("Gilman"), ["Zero Trust Networks"]);
-  assert.deepEqual(await titles("o'reilly"), [
-    "Essential Math",
-    "Zero Trust Networks",
+  assert.deepEqual(await titles("tidewater"), ["Tidewater Tables"]);
+  assert.deepEqual(await titles("Vale"), ["Signal and Silt"]);
+  // An apostrophe in a publisher's name is matched, not treated as syntax.
+  assert.deepEqual(await titles("mabry's"), [
+    "Signal and Silt",
+    "Tidewater Tables",
   ]);
   // Case-insensitive, and surrounding space is what a search box produces.
-  assert.deepEqual(await titles("  ATOMIC  "), ["Atomic Design"]);
+  assert.deepEqual(await titles("  KETTLE  "), ["Kettle Logic"]);
   assert.deepEqual(await titles("nothing here"), []);
 });
 
@@ -113,10 +114,13 @@ test("an empty query is not a search", async () => {
 });
 
 test("a book is found by the id its folder is named after", async () => {
-  const { storage } = memoryStorage(library([book("Essential Math")]));
+  const { storage } = memoryStorage(library([book("Tidewater Tables")]));
   const catalog = new CatalogService(storage, nullCache());
 
-  assert.equal((await catalog.find("essential-math"))?.title, "Essential Math");
+  assert.equal(
+    (await catalog.find("tidewater-tables"))?.title,
+    "Tidewater Tables",
+  );
   assert.equal(await catalog.find("no-such-book"), null);
 });
 

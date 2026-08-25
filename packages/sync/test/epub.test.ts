@@ -67,37 +67,40 @@ function sameBytes(actual, expected) {
 test("reads the Dublin Core a package document carries", async () => {
   const { metadata } = await readEpub(
     await book({
-      metadata: `    <dc:title>Essential Math for Data Science</dc:title>
-    <dc:creator>Thomas Nield</dc:creator>
-    <dc:publisher>O'Reilly Media, Inc.</dc:publisher>
-    <dc:date>2022-05-26</dc:date>
+      metadata: `    <dc:title>Tidewater Tables</dc:title>
+    <dc:creator>Marta Quill</dc:creator>
+    <dc:publisher>Mabry's Press</dc:publisher>
+    <dc:date>2019-04-11</dc:date>
     <dc:language>en</dc:language>
-    <dc:identifier id="id">9781098102937</dc:identifier>
-    <dc:description>Master the math needed to excel.</dc:description>`,
+    <dc:identifier id="id">9780000000019</dc:identifier>
+    <dc:description>A short account of the tables, and how to read one.</dc:description>`,
     }),
   );
 
-  assert.equal(metadata.title, "Essential Math for Data Science");
-  assert.deepEqual(metadata.authors, ["Thomas Nield"]);
-  assert.equal(metadata.publisher, "O'Reilly Media, Inc.");
-  assert.equal(metadata.published, "2022-05-26");
+  assert.equal(metadata.title, "Tidewater Tables");
+  assert.deepEqual(metadata.authors, ["Marta Quill"]);
+  assert.equal(metadata.publisher, "Mabry's Press");
+  assert.equal(metadata.published, "2019-04-11");
   assert.equal(metadata.language, "en");
-  assert.equal(metadata.identifier, "9781098102937");
-  assert.equal(metadata.isbn, "9781098102937");
-  assert.equal(metadata.description, "Master the math needed to excel.");
+  assert.equal(metadata.identifier, "9780000000019");
+  assert.equal(metadata.isbn, "9780000000019");
+  assert.equal(
+    metadata.description,
+    "A short account of the tables, and how to read one.",
+  );
 });
 
 test("decodes the entities an XML title arrives with", async () => {
-  // Left encoded, this would be stored as `ATT&amp;CK`, escaped a second time
-  // on render, and dragged into the book's slug as "att-amp-ck".
+  // Left encoded, this would be stored as `Salt&amp;Silt`, escaped a second
+  // time on render, and dragged into the book's slug as "salt-amp-silt".
   const { metadata } = await readEpub(
     await book({
       metadata:
-        "    <dc:title>ATT&amp;CK &#8212; Tactics &#x2014; Techniques</dc:title>",
+        "    <dc:title>Salt&amp;Silt &#8212; Tides &#x2014; Channels</dc:title>",
     }),
   );
 
-  assert.equal(metadata.title, "ATT&CK — Tactics — Techniques");
+  assert.equal(metadata.title, "Salt&Silt — Tides — Channels");
 });
 
 test("finds a title in a default namespace as well as a prefixed one", async () => {
@@ -113,15 +116,15 @@ test("finds a title in a default namespace as well as a prefixed one", async () 
 test("keeps every creator, and collapses the whitespace around them", async () => {
   const { metadata } = await readEpub(
     await book({
-      metadata: `    <dc:creator>Leonard Richardson</dc:creator>
+      metadata: `    <dc:creator>Piers Vale</dc:creator>
     <dc:creator opf:role="aut">
-       Sam
-       Ruby
+       Wren
+       Ashby
     </dc:creator>`,
     }),
   );
 
-  assert.deepEqual(metadata.authors, ["Leonard Richardson", "Sam Ruby"]);
+  assert.deepEqual(metadata.authors, ["Piers Vale", "Wren Ashby"]);
 });
 
 test("takes subjects one per element or several in one", async () => {
@@ -150,10 +153,10 @@ test("only reports an ISBN when the identifier really is one", async () => {
   const isbn = await readEpub(
     await book({
       metadata:
-        '    <dc:identifier id="id">urn:isbn:9781449358068</dc:identifier>',
+        '    <dc:identifier id="id">urn:isbn:9780000000026</dc:identifier>',
     }),
   );
-  assert.equal(isbn.metadata.isbn, "9781449358068");
+  assert.equal(isbn.metadata.isbn, "9780000000026");
 
   // Project Gutenberg records a URL, which contains digits and is not an ISBN.
   const url = await readEpub(
@@ -178,23 +181,23 @@ test("reads a series from either convention", async () => {
   // What Calibre has written into every book it ever exported.
   const calibre = await readEpub(
     await book({
-      metadata: `    <dc:title>Mort</dc:title>
-    <meta name="calibre:series" content="Discworld"/>
+      metadata: `    <dc:title>Saltmarch Rising</dc:title>
+    <meta name="calibre:series" content="Saltmarch"/>
     <meta name="calibre:series_index" content="4.0"/>`,
     }),
   );
-  assert.equal(calibre.metadata.series, "Discworld");
+  assert.equal(calibre.metadata.series, "Saltmarch");
   assert.equal(calibre.metadata.seriesIndex, 4);
 
   // What EPUB 3 specifies instead.
   const epub3 = await readEpub(
     await book({
-      metadata: `    <dc:title>Mort</dc:title>
-    <meta property="belongs-to-collection" id="c01">Discworld</meta>
+      metadata: `    <dc:title>Saltmarch Rising</dc:title>
+    <meta property="belongs-to-collection" id="c01">Saltmarch</meta>
     <meta refines="#c01" property="group-position">4</meta>`,
     }),
   );
-  assert.equal(epub3.metadata.series, "Discworld");
+  assert.equal(epub3.metadata.series, "Saltmarch");
   assert.equal(epub3.metadata.seriesIndex, 4);
 
   // A book in no series says nothing rather than saying nothing loudly.

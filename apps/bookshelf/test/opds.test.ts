@@ -59,17 +59,19 @@ const SHELF: Shelf = {
     }),
     // Two volumes of one series, published out of order, plus an unnumbered
     // companion — the three cases bySeries has to get right.
-    book("dune-messiah", "Dune Messiah", {
-      authors: ["Frank Herbert"],
-      series: "Dune",
+    book("saltmarch-rising", "Saltmarch Rising", {
+      authors: ["Ines Harlow"],
+      series: "Saltmarch",
       seriesIndex: 2,
     }),
-    book("dune", "Dune", {
-      authors: ["Frank Herbert"],
-      series: "Dune",
+    book("saltmarch", "Saltmarch", {
+      authors: ["Ines Harlow"],
+      series: "Saltmarch",
       seriesIndex: 1,
     }),
-    book("dune-companion", "The Dune Companion", { series: "Dune" }),
+    book("saltmarch-companion", "The Saltmarch Companion", {
+      series: "Saltmarch",
+    }),
   ],
 };
 
@@ -452,25 +454,25 @@ test("an author's feed holds their books, and knows its way back", async () => {
     ]),
     [
       ["https://shelf.test/opds/authors/Bram%20Stoker", "1"],
-      ["https://shelf.test/opds/authors/Frank%20Herbert", "2"],
+      ["https://shelf.test/opds/authors/Ines%20Harlow", "2"],
       ["https://shelf.test/opds/authors/Mary%20Shelley", "1"],
     ],
   );
 
   assert.deepEqual(text(listing, "id").slice(1), [
     "urn:bookshelf:authors:Bram%20Stoker",
-    "urn:bookshelf:authors:Frank%20Herbert",
+    "urn:bookshelf:authors:Ines%20Harlow",
     "urn:bookshelf:authors:Mary%20Shelley",
   ]);
 
-  const herbert = get(SHELF, ["authors", "Frank Herbert"]);
+  const harlow = get(SHELF, ["authors", "Ines Harlow"]);
   assert.equal(
-    herbert.headers.get("content-type"),
+    harlow.headers.get("content-type"),
     `${ATOM_ACQUISITION}; charset=utf-8`,
   );
 
-  const document = await parse(herbert);
-  assert.deepEqual(text(document, "title")[0], "Frank Herbert");
+  const document = await parse(harlow);
+  assert.deepEqual(text(document, "title")[0], "Ines Harlow");
   assert.equal(elements(document, "entry").length, 2);
   assert.equal(
     links(document, "up")[0].getAttribute("href"),
@@ -479,12 +481,12 @@ test("an author's feed holds their books, and knows its way back", async () => {
 });
 
 test("a series reads in its own order, and an extra sorts last", async () => {
-  const document = await parse(get(SHELF, ["series", "Dune"]));
+  const document = await parse(get(SHELF, ["series", "Saltmarch"]));
 
   assert.deepEqual(text(document, "title").slice(1), [
-    "Dune",
-    "Dune Messiah",
-    "The Dune Companion",
+    "Saltmarch",
+    "Saltmarch Rising",
+    "The Saltmarch Companion",
   ]);
 });
 
@@ -507,48 +509,52 @@ test("subjects group the books that name them", async () => {
 });
 
 test("search filters, under either name the two versions use", async () => {
-  for (const query of ["q=dune", "query=dune"]) {
+  for (const query of ["q=saltmarch", "query=saltmarch"]) {
     const document = await parse(get(SHELF, ["books"], { query }));
     assert.equal(elements(document, "entry").length, 3, query);
-    assert.equal(text(document, "title")[0], "Books matching “dune”");
+    assert.equal(text(document, "title")[0], "Books matching “saltmarch”");
   }
 
   // The query rides along in the paging links, so page two of a search is
   // still that search.
   const many: Shelf = {
     books: Array.from({ length: PAGE_SIZE + 1 }, (_, index) =>
-      book(`dune-${index}`, `Dune ${index}`),
+      book(`saltmarch-${index}`, `Saltmarch ${index}`),
     ),
   };
-  const document = await parse(get(many, ["books"], { query: "q=dune" }));
+  const document = await parse(get(many, ["books"], { query: "q=saltmarch" }));
   assert.equal(
     links(document, "next")[0].getAttribute("href"),
-    "https://shelf.test/opds/books?q=dune&page=2",
+    "https://shelf.test/opds/books?q=saltmarch&page=2",
   );
 });
 
 test("a query narrows whichever book feed it arrives on", async () => {
   const document = await parse(
-    get(SHELF, ["authors", "Frank Herbert"], { query: "q=messiah" }),
+    get(SHELF, ["authors", "Ines Harlow"], { query: "q=rising" }),
   );
 
   assert.deepEqual(text(document, "title"), [
-    "Frank Herbert matching “messiah”",
-    "Dune Messiah",
+    "Ines Harlow matching “rising”",
+    "Saltmarch Rising",
   ]);
 
   // And rides the paging links from there, the same as it does on /opds/books.
   const many: Shelf = {
     books: Array.from({ length: PAGE_SIZE + 1 }, (_, index) =>
-      book(`dune-${index}`, `Dune ${index}`, { authors: ["Frank Herbert"] }),
+      book(`saltmarch-${index}`, `Saltmarch ${index}`, {
+        authors: ["Ines Harlow"],
+      }),
     ),
   };
   assert.equal(
     links(
-      await parse(get(many, ["authors", "Frank Herbert"], { query: "q=dune" })),
+      await parse(
+        get(many, ["authors", "Ines Harlow"], { query: "q=saltmarch" }),
+      ),
       "next",
     )[0].getAttribute("href"),
-    "https://shelf.test/opds/authors/Frank%20Herbert?q=dune&page=2",
+    "https://shelf.test/opds/authors/Ines%20Harlow?q=saltmarch&page=2",
   );
 });
 
@@ -702,9 +708,11 @@ test("OPDS 2.0 is the same catalog as JSON", async () => {
 
   // Several authors are an array where one is a string, which is the model this
   // version borrows from Readium.
-  const dune = feed.publications.find((p) => p.metadata.title === "Dune");
-  assert.deepEqual(dune?.metadata.belongsTo, {
-    series: { name: "Dune", position: 1 },
+  const saltmarch = feed.publications.find(
+    (p) => p.metadata.title === "Saltmarch",
+  );
+  assert.deepEqual(saltmarch?.metadata.belongsTo, {
+    series: { name: "Saltmarch", position: 1 },
   });
 
   assert.equal(

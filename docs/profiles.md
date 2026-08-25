@@ -1,41 +1,56 @@
 # Profiles
 
-Everyone reading from the same library keeps their own place in each book.
+Profiles let everyone sharing a library keep their own place in each book.
 
-Everyone reading from the same library keeps their own place in each book. A
-library that has never been configured has one profile, called Reader, and no
-profile file at all — the default is implicit until something is actually
-changed, so a fresh install writes nothing it might never need.
+## Using them
 
-The shelf header holds the switcher: who is reading, everyone else in one
-click, and a field to add someone. Creating a profile starts reading as it,
-wherever it was created from — the alternative leaves the shelf showing another
-person's positions with nothing to say why. `/profiles` is for renaming and
-deleting, which are rarer and want more room.
+Your shelf starts with one profile, called Reader. You don't have to do
+anything with profiles if you're the only one using the library.
 
-It is a `<details>` element, so switching and creating are ordinary form posts
-and work with scripting off; the client half only adds closing on Escape or on
-a click elsewhere. The cookie is set per request rather than per build, because
-a `Secure` cookie decided by NODE_ENV is one a browser silently discards over
-plain HTTP — which is exactly how a box on your own network is reached.
+**To switch or add someone**, use the switcher in the shelf header. It shows who
+is reading now, everyone else one click away, and a field to add a new person.
+Adding someone switches you to them straight away.
 
-Profiles are not accounts. A cookie names one; it does not prove anything about
-who is holding it, and anyone who can reach the library can read as any profile
-in it. That is the right amount of ceremony for a shelf shared with the people
-you live with, and the wrong amount for one on the open internet — see
-[Not done yet](../README.md#not-done-yet).
+**To rename or delete a profile**, go to `/profiles`.
 
-Positions are written to the browser first and to the library after a pause,
-which is what keeps page turns off the network: a chapter's worth of turns
-collapses into one write, and leaving the page flushes what is outstanding
-through `sendBeacon`. Both copies carry a timestamp and the newest wins, so
-picking a book up on a phone resumes where the laptop left off, and a reader
-that was offline does not lose its place to a stale copy.
+Deleting a profile removes its reading positions. Everything else — your books,
+your covers, your catalog — is untouched.
 
-Storage the app cannot write to is not an error. `writableStorage()` returns
-null, the profiles page says so, and reading positions stay in the browser
-exactly as they did before any of this existed.
+## What each profile keeps
 
-This costs one read of the profile's positions per shelf render, on top of the
-cached catalog. It is not cached, because a position saved a moment ago should
-show as *Continue* immediately.
+Each profile has its own reading position in every book. That's the whole of it.
+
+Layout, zoom and page tint are remembered per device instead, because they're
+properties of the screen you're reading on rather than of you. Switch profiles
+on the same laptop and the reader looks the same; open the same profile on a
+phone and it doesn't.
+
+## Reading on more than one device
+
+Pick a book up on your phone and it resumes where your laptop left off. Both
+copies carry a timestamp and the newest one wins, so a device that was offline
+for a while won't overwrite a place you set somewhere else.
+
+Two devices reading the same profile at the same time is last-write-wins. If you
+read the same book on two screens at once, one of them will win and the other's
+place is lost.
+
+## Profiles are not accounts
+
+**Anyone who can reach your library can read as any profile in it.** There's no
+password and nothing to log in to. The cookie names a profile; it doesn't prove
+anything about who's holding it.
+
+Profiles are for keeping housemates' bookmarks apart. They are not a way to keep
+anyone out. If your shelf is somewhere strangers can reach it, put it behind
+something that asks who's calling — see [what's missing](roadmap.md).
+
+## On a read-only library
+
+If the app can't write to your library — a read-only instance, or storage that
+declines writes — profiles can't be added, renamed or deleted, and the profiles
+page tells you so. Switching between profiles that already exist still works.
+
+Your reading positions keep working too. They stay in your browser instead of
+being saved to the library, which is how the app behaved before profiles
+existed.

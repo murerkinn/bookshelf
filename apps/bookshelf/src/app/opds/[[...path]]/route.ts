@@ -1,6 +1,7 @@
 import { serviceUnavailable } from "@/lib/http";
 import { serveOpds } from "@/lib/opds/serve";
 import { siteOrigin } from "@/lib/origin";
+import { enforceR2RateLimit } from "@/lib/rate-limit";
 import { getServices } from "@/services/container";
 import { reading } from "@/services/errors";
 
@@ -32,7 +33,15 @@ export async function GET(
 
 async function serve(request: Request, ctx: RouteContext<"/opds/[[...path]]">) {
   const { path } = await ctx.params;
-  const { catalog } = await getServices();
+  const { catalog, limits } = await getServices();
+
+  // Every feed is a view of the catalog, so there is nothing on this route to
+  // be later than: the read below is the first thing it does. The catalog's own
+  // memo and response cache may well answer it without touching the bucket,
+  // which the route cannot see from here — so an OPDS client polling for new
+  // books is counted whether or not its poll reached R2.
+  const limited = await enforceR2RateLimit(request, limits);
+  if (limited) return limited;
 
   const [origin, shelf] = await Promise.all([
     siteOrigin(),

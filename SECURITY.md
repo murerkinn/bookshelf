@@ -2,41 +2,44 @@
 
 ## Reporting a vulnerability
 
-Please don't open a public issue for anything exploitable. Use [private
-vulnerability reporting][report] on this repository — it opens a private
-thread with the maintainer, and a fix can be prepared before anything is
-public.
+Don't open a public issue for anything exploitable. Use
+[private vulnerability reporting][report] instead — it opens a private thread
+with the maintainer so a fix can be ready before any of it is public.
 
 [report]: https://github.com/murerkinn/bookshelf/security/advisories/new
 
-Useful in a report: what an attacker gets, and the shortest path to seeing it
-happen. A key that escapes the library, a way to reach one profile's reading
-positions from another, a request that makes the Worker serve bytes from
-outside the configured bucket — those are the shapes worth writing up.
+Tell us what an attacker gets, and the shortest path to seeing it happen. The
+shapes worth writing up:
+
+- a key that escapes the library
+- a way to reach one profile's reading positions from another
+- a request that makes the Worker serve bytes from outside the configured bucket
 
 This is a side project with one maintainer, so treat any timeline as best
-effort. You will get an acknowledgement; you may not get it the same day.
+effort. You'll get an acknowledgement; you may not get it the same day.
 
 ## Supported versions
 
-There are no releases yet. `main` is the only version that gets fixes, and
-self-hosted instances need to pull and redeploy to receive one.
+There are no releases yet. `main` is the only version that gets fixes, so a
+self-hosted instance needs to pull and redeploy to receive one.
 
-## Not vulnerabilities
+## What isn't a vulnerability
 
-**The app has no authentication.** Anyone with the URL can read and download
-the whole library, and pick any profile while doing it. That is deliberate and
-documented in [Not done yet](README.md#not-done-yet). Profiles keep housemates'
-bookmarks apart; they are not an access control boundary. A report that amounts
-to "an unauthenticated user can read the books" describes the design.
+Three things are missing by design rather than by oversight. Please don't report
+them.
 
-**Whatever you put in a library is served.** The sync tool publishes what it is
-pointed at. Deciding what belongs in a public bucket is the operator's call.
+**There's no authentication.** Anyone with the URL can read and download the
+whole library, and pick any profile while doing it. Profiles keep housemates'
+bookmarks apart; they aren't an access control boundary. A report that amounts
+to "an unauthenticated user can read the books" describes the design. See
+[the README](README.md#before-you-commit-a-library-to-it).
+
+**Whatever you put in a library is served.** The sync tool publishes what you
+point it at. Deciding what belongs in a public bucket is yours to make.
 
 **A library is stored in the clear.** Books, covers and the catalog are
-published as they are, and the object keys are slugified titles — so whoever
-holds the storage can read the shelf, and so can anything able to list the
-bucket. That is the design today, not an oversight: see
-[roadmap #18](docs/roadmap.md) for what changing it would take, and
-[the filesystem provider](docs/providers/fs.md#encrypting-the-directory) for
-encrypting a library at rest without waiting for it.
+published as they are, and object keys are slugified titles — so whoever holds
+your storage can read your shelf, and so can anything able to list the bucket.
+[What's missing](docs/roadmap.md) covers what changing that would take, and
+[the filesystem provider](docs/providers/fs.md#encrypting-your-library-at-rest)
+covers encrypting a library at rest today.

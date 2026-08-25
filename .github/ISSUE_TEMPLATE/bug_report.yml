@@ -5,9 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        If a specific book imported wrongly — missing cover, wrong title, will
+        If one specific book imported wrongly — missing cover, wrong title, will
         not open — use the **Book imported wrongly** template instead. It asks
-        for the things that actually narrow that down.
+        for what narrows that down.
 
   - type: textarea
     id: what

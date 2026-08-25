@@ -7,6 +7,7 @@ import {
   unsatisfiedRange,
 } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
+import { enforceDownloadRateLimit, enforceR2RateLimit } from "@/lib/rate-limit";
 import { getServices } from "@/services/container";
 import { reading } from "@/services/errors";
 
@@ -92,7 +93,22 @@ async function serve(
   const conditional = request.headers.get("if-none-match");
   const requestedRange = request.headers.get("range");
 
-  const { storage } = await getServices();
+  const { storage, limits } = await getServices();
+
+  // Both limits, in that order, with nothing between them and the bucket:
+  // every path out of here leads to R2, so this is as late as the check gets.
+  const overR2 = await enforceR2RateLimit(request, limits);
+  if (overR2) return overR2;
+
+  // Only a request for the whole file is a download. A ranged one is the PDF
+  // reader turning a page — pdf.js fetches this URL a slice at a time — and
+  // counting those against the download allowance would stop a book being read
+  // long before it was finished. They are still counted above, which is what
+  // bounds them; this second, tighter allowance is for carrying a book off.
+  if (!requestedRange) {
+    const overDownload = await enforceDownloadRateLimit(request, limits);
+    if (overDownload) return overDownload;
+  }
 
   // A range has to be resolved against the object's length — `bytes=-1024` and
   // an open-ended `bytes=1024-` both need it — so a ranged request costs a look

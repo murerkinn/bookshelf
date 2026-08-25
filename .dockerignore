@@ -22,3 +22,5 @@ docs/
 .nvmrc
 *.md
 !README.md
+# The image ships other people's code, so it ships their notices too.
+!THIRD-PARTY-NOTICES.md

@@ -19,13 +19,13 @@ function read(bytes) {
 
 test("reads an information dictionary out of a classic cross-reference table", async () => {
   const pdf = classicPdf({
-    info: `/Title ${literal("Essential Math")} /Author ${literal("Thomas Nield")} /CreationDate (D:20220526120000Z)`,
+    info: `/Title ${literal("Tidewater Tables")} /Author ${literal("Marta Quill")} /CreationDate (D:20200102030405Z)`,
     pages: 12,
   });
 
   const document = await read(pdf);
-  assert.equal(document.info.Title, "Essential Math");
-  assert.equal(document.info.Author, "Thomas Nield");
+  assert.equal(document.info.Title, "Tidewater Tables");
+  assert.equal(document.info.Author, "Marta Quill");
   assert.equal(document.pages, 12);
   assert.equal(document.encrypted, false);
 });
@@ -34,13 +34,13 @@ test("reads an information dictionary out of an object stream", async () => {
   // The path a reader working from raw bytes cannot see into, and the one where
   // the last object in the stream ends at the last byte of it.
   const pdf = objectStreamPdf({
-    info: `/Title ${literal("RESTful Web Services")} /Author ${literal("Leonard Richardson")}`,
+    info: `/Title ${literal("Signal and Silt")} /Author ${literal("Piers Vale")}`,
     pages: 448,
   });
 
   const document = await read(pdf);
-  assert.equal(document.info.Title, "RESTful Web Services");
-  assert.equal(document.info.Author, "Leonard Richardson");
+  assert.equal(document.info.Title, "Signal and Silt");
+  assert.equal(document.info.Author, "Piers Vale");
   assert.equal(document.pages, 448);
 });
 
@@ -74,16 +74,16 @@ test("decodes text strings however they were encoded", async () => {
 });
 
 test("recovers a document whose cross-reference table cannot be used", async () => {
-  const info = `/Title ${literal("Atomic Design")} /Author ${literal("Brad Frost")}`;
+  const info = `/Title ${literal("Kettle Logic")} /Author ${literal("Wren Ashby")}`;
 
   // A `startxref` pointing past the end of the file.
   const broken = await read(brokenXrefPdf({ info, pages: 189 }));
-  assert.equal(broken.info.Title, "Atomic Design");
+  assert.equal(broken.info.Title, "Kettle Logic");
   assert.equal(broken.pages, 189);
 
   // Something prepended, which shifts every offset the table recorded.
   const shifted = await read(shiftedPdf({ info, pages: 189 }));
-  assert.equal(shifted.info.Title, "Atomic Design");
+  assert.equal(shifted.info.Title, "Kettle Logic");
   assert.equal(shifted.pages, 189);
 });
 
@@ -124,13 +124,13 @@ test("survives a truncated file without throwing", async () => {
 });
 
 test("turns a PDF date into ISO 8601, at whatever precision it was given", () => {
-  assert.equal(pdfDate("D:20110217203831+01'00'"), "2011-02-17T20:38:31+01:00");
-  assert.equal(pdfDate("D:20220526120000Z"), "2022-05-26T12:00:00Z");
-  assert.equal(pdfDate("D:2011"), "2011");
-  assert.equal(pdfDate("D:201102"), "2011-02");
-  assert.equal(pdfDate("20110217"), "2011-02-17");
+  assert.equal(pdfDate("D:20200102030405+01'00'"), "2020-01-02T03:04:05+01:00");
+  assert.equal(pdfDate("D:20200102030405Z"), "2020-01-02T03:04:05Z");
+  assert.equal(pdfDate("D:2020"), "2020");
+  assert.equal(pdfDate("D:202001"), "2020-01");
+  assert.equal(pdfDate("20200102"), "2020-01-02");
   // A zone offset with no minutes, which some writers produce.
-  assert.equal(pdfDate("D:20110217203831+01"), "2011-02-17T20:38:31+01:00");
+  assert.equal(pdfDate("D:20200102030405+01"), "2020-01-02T03:04:05+01:00");
   assert.equal(pdfDate("nonsense"), null);
   assert.equal(pdfDate(""), null);
 });
