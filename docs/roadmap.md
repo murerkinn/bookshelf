@@ -426,11 +426,11 @@ What landed — `/opds`, both versions, in `apps/bookshelf/src/lib/opds/`:
   operations over the array the catalog already holds in the isolate, so they
   needed none of the generated index **#9** will want — which is the one thing
   this entry expected to depend on and did not.
-- **Search**, reusing `catalog.search()` rather than restating what a query
-  matches. That predicate moved out of `CatalogService` as `searchBooks` so the
-  shelf and the feed cannot disagree. 1.2 gets an OpenSearch description
-  document, 2.0 the templated link it requires, which is why `/opds/books`
-  answers to `query` as well as `q`.
+- **Search**, reusing the shelf's own predicate rather than restating what a
+  query matches. It moved out of `CatalogService` as `searchBooks`, which both
+  the shelf and the feed now call, so the two cannot disagree. 1.2 gets an
+  OpenSearch description document, 2.0 the templated link it requires, which is
+  why `/opds/books` answers to `query` as well as `q`.
 - **Paging** at fifty to a page, `first`/`previous`/`next`/`last`, the query
   carried along, and page one as the feed itself rather than `?page=1`.
 - **A weak ETag over the catalog date, the URL and the format** rather than over
