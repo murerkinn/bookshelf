@@ -2,6 +2,7 @@ import path from "node:path";
 import { findConfigSync } from "@bookshelf/core/config";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/headers";
 
 /**
  * Which provider holds the library is decided here, at build time, from the
@@ -32,6 +33,8 @@ function providerDefaults(): Record<string, string> {
 
 const nextConfig: NextConfig = {
   env: providerDefaults(),
+
+  headers: securityHeaders,
 };
 
 // Makes the Cloudflare bindings (R2, etc.) available to `next dev`.
