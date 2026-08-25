@@ -43,12 +43,12 @@ ENV PORT=3000
 WORKDIR /app
 COPY --from=build /app ./
 
-# /books is where books are read from, /library is the tree the sync tool
-# builds, /data holds the published library and everything the app writes to
-# it. Created and owned here so a named volume mounted at /data inherits an
-# ownership the app can actually write to.
-RUN mkdir -p /books /library /data/library \
-  && chown -R node:node /books /library /data
+# /books is where books are read from, /data holds the build output, the
+# published library, and everything the app writes to. /data is created before
+# any mounts so a named volume mounted at /data inherits ownership the app
+# can actually write to.
+RUN mkdir -p /books /data/library-build /data/library \
+  && chown -R node:node /books /data
 
 USER node
 EXPOSE 3000
