@@ -6,6 +6,7 @@ export {
   CATALOG_FILE,
   CATALOG_VERSION,
   METADATA_FILE,
+  parseBookKey,
 } from "./catalog.js";
 export type { BookshelfConfig, StorageConfig } from "./config.js";
 export { CONFIG_FILES } from "./config.js";

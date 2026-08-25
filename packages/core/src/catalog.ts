@@ -70,3 +70,35 @@ export type Catalog = {
 export function bookKey(id: string, file: string): string {
   return `${id}/${file}`;
 }
+
+/**
+ * A key that addresses a file inside a book's folder, split into its two
+ * halves — or null for anything else.
+ *
+ * The inverse of {@link bookKey}, and the only shape of key a request is
+ * allowed to name. Every URL the shelf builds is a `bookKey`, so a key that is
+ * not one was not built here: the catalog, anything under the app's own
+ * reserved prefix, and any object that happens to share the bucket.
+ *
+ * By shape rather than against the catalog on purpose. A byte route that had to
+ * resolve a key through the catalog would stop serving books the moment the
+ * catalog could not be read or could not be parsed — an empty catalog is a
+ * legitimate answer for an unpublished library, and it would turn every
+ * download into a 404. This costs no read and cannot fail open.
+ */
+export function parseBookKey(key: string): { id: string; file: string } | null {
+  const slash = key.indexOf("/");
+  if (slash === -1) return null;
+
+  const id = key.slice(0, slash);
+  const file = key.slice(slash + 1);
+
+  // An id is a slug, so it leads with an alphanumeric and cannot be a dotted
+  // name. A file sits directly in the folder, so it holds no slash — which is
+  // what keeps `progress/<profile>.json` from being reachable as a file — and
+  // cannot lead with a dot, which is what rules out `.` and `..`.
+  if (!/^[a-z0-9][a-z0-9-]{0,95}$/.test(id)) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(file)) return null;
+
+  return { id, file };
+}

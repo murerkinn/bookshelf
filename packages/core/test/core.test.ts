@@ -9,6 +9,7 @@ import {
   isProfileId,
   isStateKey,
   PROFILES_FILE,
+  parseBookKey,
   parseJsonc,
   progressFile,
   rangedSource,
@@ -73,6 +74,46 @@ test("state lives under one reserved prefix", () => {
   assert.equal(isStateKey("a-book/metadata.json"), false);
   assert.equal(isStateKey("a-book/a-book.epub"), false);
   assert.equal(isStateKey("bookshelf/a.epub"), false);
+});
+
+test("a key from a request names a file in a book's folder, or nothing", () => {
+  assert.deepEqual(parseBookKey(bookKey("dracula", "dracula.epub")), {
+    id: "dracula",
+    file: "dracula.epub",
+  });
+  assert.deepEqual(parseBookKey("dracula/cover.webp"), {
+    id: "dracula",
+    file: "cover.webp",
+  });
+  // Slugs collide and get a numeric suffix, and a title can be long.
+  assert.ok(parseBookKey("the-tempest-2/the-tempest-2.pdf"));
+  assert.ok(parseBookKey(`${"a".repeat(80)}/book.epub`));
+
+  // The reason this exists: the app's own state is in the same library, and a
+  // byte route that took its key from the URL would serve it.
+  assert.equal(parseBookKey(PROFILES_FILE), null);
+  assert.equal(parseBookKey(progressFile("someone")), null);
+
+  // Nor anything else in the bucket. A file sits directly in a book's folder,
+  // so a key with more than one slash in it is not one.
+  assert.equal(parseBookKey("catalog.json"), null);
+  assert.equal(parseBookKey(""), null);
+  assert.equal(parseBookKey("dracula"), null);
+  assert.equal(parseBookKey("dracula/"), null);
+  assert.equal(parseBookKey("dracula/chapters/one.xhtml"), null);
+  assert.equal(parseBookKey("/etc/passwd"), null);
+
+  // Traversal is refused by the same rule that refuses a dotfile, which is why
+  // it holds however many times it is applied.
+  assert.equal(parseBookKey("../catalog.json"), null);
+  assert.equal(parseBookKey("dracula/../.bookshelf/profiles.json"), null);
+  assert.equal(parseBookKey("dracula/.."), null);
+  assert.equal(parseBookKey(".bookshelf/profiles.json"), null);
+
+  // An id is a slug: lower case, no spaces, and it never leads with a dash.
+  assert.equal(parseBookKey("Dracula/dracula.epub"), null);
+  assert.equal(parseBookKey("-dracula/dracula.epub"), null);
+  assert.equal(parseBookKey("dra cula/dracula.epub"), null);
 });
 
 test("a profile id is constrained because it becomes a file name", () => {

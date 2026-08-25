@@ -70,6 +70,15 @@ Deliberately absent from `Storage`: `list`. The catalog is what enumerates the
 library, so no request may discover books by walking the bucket. Enumeration
 lives on `StorageAdmin`, which never runs in the app.
 
+Nor may a request name a key of its own. The three routes that serve bytes take
+theirs from the URL, so each puts it through `parseBookKey` first and answers
+`404` to anything that is not a file inside a book's folder. Without that the
+URL is a read of any object the provider will answer for — including the app's
+own state, which shares the library with the books: `.bookshelf/profiles.json`
+names everyone reading here and `.bookshelf/progress/<profile>.json` says what
+one of them reads and where they are. It is checked by shape rather than against
+the catalog so that a library whose catalog cannot be read still serves books.
+
 `write` and `remove` are on `Storage` but optional, because a provider may
 front a destination that genuinely cannot be written to. Callers narrow with
 `writableStorage()` and degrade rather than throwing, so a read-only library is

@@ -1,3 +1,4 @@
+import { parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { entryContentType } from "@/lib/media";
 import { getServices } from "@/services/container";
@@ -20,8 +21,16 @@ function split(segments: string[]): { key: string; entryPath: string } | null {
   );
   if (boundary === -1 || boundary === segments.length - 1) return null;
 
+  const key = segments.slice(0, boundary + 1).join("/");
+  // The same rule the other two byte routes apply: the archive named here is a
+  // file inside a book's folder, not any object in the bucket that happens to
+  // end in `.epub`. The entry path within it needs no such check — it is
+  // matched against the archive's own directory, which cannot name anything
+  // outside itself.
+  if (!parseBookKey(key)) return null;
+
   return {
-    key: segments.slice(0, boundary + 1).join("/"),
+    key,
     entryPath: segments.slice(boundary + 1).join("/"),
   };
 }

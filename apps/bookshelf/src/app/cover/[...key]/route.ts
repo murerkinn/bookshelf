@@ -1,4 +1,4 @@
-import { normaliseEtag } from "@bookshelf/core";
+import { normaliseEtag, parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { imageContentType, isImage } from "@/lib/media";
 import { getServices } from "@/services/container";
@@ -37,7 +37,11 @@ async function serve(
   const { key } = await routeContext.params;
   const objectKey = key.join("/");
 
-  if (!isImage(objectKey)) {
+  // A cover is a file inside a book's folder and an image. The extension check
+  // was already here and is the narrower of the two for this route; the shape
+  // check is what keeps every byte route agreeing about which keys a request
+  // may name, rather than each being safe for its own separate reason.
+  if (!parseBookKey(objectKey) || !isImage(objectKey)) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -74,6 +78,9 @@ async function serve(
     "content-type": found.object.contentType ?? imageContentType(objectKey),
     "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
     etag: found.object.etag,
+    // An image served as something a browser sniffs its way into rendering
+    // differently is the one way a cover could be more than a cover.
+    "x-content-type-options": "nosniff",
   });
 
   if (!found.body) {

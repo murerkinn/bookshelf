@@ -2,12 +2,36 @@ import {
   contentRange,
   ifRangeMatches,
   normaliseEtag,
+  parseBookKey,
   parseByteRange,
   unsatisfiedRange,
 } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { getServices } from "@/services/container";
 import { reading } from "@/services/errors";
+
+/**
+ * The content types `?inline=1` is honoured for.
+ *
+ * An inline disposition asks the browser to render the object in this origin,
+ * so the list is what can be rendered without running script here. A PDF goes
+ * to the browser's own viewer; plain text is drawn as text. Anything else —
+ * `text/html`, `image/svg+xml`, an XHTML document — would execute in the
+ * shelf's origin against its cookies, so it is served as an attachment
+ * regardless of what was asked for. The file still arrives; it just arrives as
+ * a download.
+ *
+ * The type comes from the provider rather than from this app: R2 hands back
+ * what was set at upload. The sync tool sets it from the extension, but the
+ * bucket is not necessarily only ever written by the sync tool.
+ */
+const INLINE_CONTENT_TYPES = new Set(["application/pdf", "text/plain"]);
+
+function mayInline(contentType: string): boolean {
+  return INLINE_CONTENT_TYPES.has(
+    contentType.split(";")[0].trim().toLowerCase(),
+  );
+}
 
 /** RFC 6266 `filename` + `filename*`, so non-ASCII titles survive the trip. */
 function contentDisposition(fileName: string, inline: boolean): string {
@@ -50,6 +74,17 @@ async function serve(
 ) {
   const { key } = await ctx.params;
   const objectKey = key.join("/");
+
+  // Only a file inside a book's folder, and nothing else in the bucket. Without
+  // this the URL is a read of any key the provider will answer for, including
+  // the app's own state — `.bookshelf/profiles.json` names everyone reading
+  // here, and `.bookshelf/progress/<profile>.json` says what they read and
+  // where they are. Neither is a book, and neither has any business on a route
+  // that serves books.
+  const target = parseBookKey(objectKey);
+  if (!target) {
+    return new Response("Not found", { status: 404 });
+  }
 
   // `?inline=1` lets the reader embed a format the browser can display itself,
   // such as a PDF, instead of prompting a download.
@@ -101,6 +136,9 @@ async function serve(
   const headers = new Headers({
     "accept-ranges": "bytes",
     etag: object.etag,
+    // The type below is the provider's, and a browser that sniffs past it can
+    // arrive at a different answer to the one this route stated.
+    "x-content-type-options": "nosniff",
   });
 
   if (!found.body) {
@@ -119,10 +157,11 @@ async function serve(
     return new Response(null, { status: 416, headers });
   }
 
-  headers.set("content-type", object.contentType ?? "application/octet-stream");
+  const contentType = object.contentType ?? "application/octet-stream";
+  headers.set("content-type", contentType);
   headers.set(
     "content-disposition",
-    contentDisposition(objectKey.slice(objectKey.lastIndexOf("/") + 1), inline),
+    contentDisposition(target.file, inline && mayInline(contentType)),
   );
 
   // What the provider says it served, not what was asked for.
