@@ -265,6 +265,36 @@ test("a book links the browser reader as an alternate, not an acquisition", asyn
   assert.equal(link.getAttribute("type"), "text/html");
 });
 
+test("the reader link is the format the shelf would open, not the first", async () => {
+  // The sync tool sorts a book's files, so today an EPUB precedes a PDF and
+  // taking the first would look right. It is `readableFormat` that decides,
+  // and this is the order that tells the two apart.
+  const backwards: Shelf = {
+    books: [
+      book("dracula", "Dracula", {
+        formats: [
+          { format: "pdf", file: "dracula.pdf", size: 2_048_000 },
+          { format: "epub", file: "dracula.epub", size: 512_000 },
+        ],
+      }),
+    ],
+  };
+
+  const document = await parse(get(backwards, ["books"]));
+  assert.equal(
+    links(document, "alternate")[0].getAttribute("href"),
+    "https://shelf.test/read/dracula/dracula.epub",
+  );
+
+  const feed = (await get(backwards, ["books"], {
+    accept: OPDS_JSON,
+  }).json()) as { publications: { links: { rel: string; href: string }[] }[] };
+  assert.equal(
+    feed.publications[0].links.find((link) => link.rel === "alternate")?.href,
+    "https://shelf.test/read/dracula/dracula.epub",
+  );
+});
+
 test("a book's metadata reaches the entry", async () => {
   const document = await parse(get(SHELF, ["books"]));
 
@@ -467,6 +497,31 @@ test("search filters, under either name the two versions use", async () => {
   );
 });
 
+test("a query narrows whichever book feed it arrives on", async () => {
+  const document = await parse(
+    get(SHELF, ["authors", "Frank Herbert"], { query: "q=messiah" }),
+  );
+
+  assert.deepEqual(text(document, "title"), [
+    "Frank Herbert matching “messiah”",
+    "Dune Messiah",
+  ]);
+
+  // And rides the paging links from there, the same as it does on /opds/books.
+  const many: Shelf = {
+    books: Array.from({ length: PAGE_SIZE + 1 }, (_, index) =>
+      book(`dune-${index}`, `Dune ${index}`, { authors: ["Frank Herbert"] }),
+    ),
+  };
+  assert.equal(
+    links(
+      await parse(get(many, ["authors", "Frank Herbert"], { query: "q=dune" })),
+      "next",
+    )[0].getAttribute("href"),
+    "https://shelf.test/opds/authors/Frank%20Herbert?q=dune&page=2",
+  );
+});
+
 test("a query nothing matches is an empty feed rather than a 404", async () => {
   const response = get(SHELF, ["books"], { query: "q=nothing here" });
 
@@ -561,6 +616,19 @@ test("a feed is good for the minute the catalog memo is", async () => {
     get(SHELF, []).headers.get("cache-control"),
     "public, max-age=60",
   );
+});
+
+test("a cacheable feed says what it was negotiated on", async () => {
+  // The URL is the same for both versions and the response is public, so a
+  // shared cache needs telling that `Accept` is what separates them.
+  for (const response of [
+    get(SHELF, []),
+    get(SHELF, [], { accept: OPDS_JSON }),
+    get(SHELF, ["search"]),
+    get(SHELF, [], { ifNoneMatch: get(SHELF, []).headers.get("etag") ?? "" }),
+  ]) {
+    assert.equal(response.headers.get("vary"), "accept");
+  }
 });
 
 test("OPDS 2.0 is the same catalog as JSON", async () => {

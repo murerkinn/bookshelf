@@ -384,11 +384,17 @@ function resolve(
   const group = named(groups, second);
   if (!group) return null;
 
+  // A query narrows whichever feed it arrives on, not only `/opds/books`: a
+  // client that offers search while browsing an author sends it here, and a
+  // parameter silently ignored is worse than one not offered.
+  const query = queryFor(request.query);
+
   return acquisition(shelf, request, format, {
     path: `/opds/${first}/${encodeURIComponent(group.name)}`,
-    title: group.name,
-    books: group.books,
+    title: query ? `${group.name} matching “${query}”` : group.name,
+    books: searchBooks(group.books, query),
     up: { kind: "navigation", href: builder.feed(`/opds/${first}`) },
+    query,
   });
 }
 
@@ -404,6 +410,12 @@ export function serveOpds(shelf: Shelf, request: OpdsRequest): Response {
 
   const headers = new Headers({
     "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
+    // Which version this is was negotiated from `Accept`, and the response is
+    // publicly cacheable — so without this a shared cache that stored the Atom
+    // one would go on handing it to clients asking for JSON, and the other way
+    // round. The URL is the same for both; the request header is the whole of
+    // what tells them apart.
+    vary: "accept",
   });
 
   /**

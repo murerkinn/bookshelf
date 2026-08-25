@@ -16,6 +16,7 @@ import {
 } from "@/lib/opds/feed";
 import { attribute, element, escapeXml, plainText } from "@/lib/opds/xml";
 import { SITE_NAME } from "@/lib/site";
+import { readableFormat } from "@/services/catalog";
 
 /**
  * OPDS 1.2: an Atom feed with a profile on its media type.
@@ -114,6 +115,7 @@ function bookLinks(book: Book, asset: (path: string) => string): string {
   const cover = book.cover
     ? `/cover/${encodeKey(bookKey(book.id, book.cover))}`
     : undefined;
+  const readable = readableFormat(book);
 
   return [
     ...book.formats.map((format) =>
@@ -133,13 +135,13 @@ function bookLinks(book: Book, asset: (path: string) => string): string {
       : []),
     // Not an acquisition: a client that would rather hand a book to a browser
     // than download it can, and the browser reader keeps a reading position.
-    ...(book.formats.length > 0
+    // The same format the shelf's own Read button opens, through the same
+    // helper — two answers to "which one is readable" would be one too many.
+    ...(readable
       ? [
           link({
             rel: "alternate",
-            href: asset(
-              `/read/${encodeKey(bookKey(book.id, book.formats[0].file))}`,
-            ),
+            href: asset(`/read/${encodeKey(bookKey(book.id, readable.file))}`),
             type: "text/html",
             title: "Read in the browser",
           }),

@@ -114,18 +114,6 @@ export class CatalogService {
   }
 
   /**
-   * When the library was last published, for anything that has to put a date on
-   * what it serves — an Atom feed has to, on the feed and on every entry.
-   *
-   * Undefined where the catalog carries no date, which callers answer for
-   * themselves rather than being given a guess: a made-up timestamp that moves
-   * on every request is worse than none.
-   */
-  async generatedAt(): Promise<string | undefined> {
-    return (await this.shelf()).generatedAt;
-  }
-
-  /**
    * The catalog as the response cache has it, or undefined for anything that
    * went wrong — a miss, an unreachable cache, an entry that will not parse.
    * None of those is a reason not to read the real thing.

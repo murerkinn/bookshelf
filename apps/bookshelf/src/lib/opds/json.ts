@@ -9,6 +9,7 @@ import {
   type OpdsLink,
   urls,
 } from "@/lib/opds/feed";
+import { readableFormat } from "@/services/catalog";
 
 /**
  * OPDS 2.0: the same catalog as JSON.
@@ -56,6 +57,7 @@ function publication(
   const cover = book.cover
     ? `/cover/${encodeKey(bookKey(book.id, book.cover))}`
     : undefined;
+  const readable = readableFormat(book);
 
   return present({
     metadata: present({
@@ -84,12 +86,13 @@ function publication(
           type: contentTypeFor(format.file),
         }),
       ),
-      ...(book.formats.length > 0
+      // The format the shelf's own Read button opens, through the same helper.
+      ...(readable
         ? [
             jsonLink({
               rel: "alternate",
               href: asset(
-                `/read/${encodeKey(bookKey(book.id, book.formats[0].file))}`,
+                `/read/${encodeKey(bookKey(book.id, readable.file))}`,
               ),
               type: "text/html",
               title: "Read in the browser",

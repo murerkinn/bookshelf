@@ -39,9 +39,10 @@ names would slug the same stay two authors.
 
 ### Searching
 
-`?q=` on any book feed, which is the same parameter the shelf's own search box
-uses, so a URL can be carried between the two by hand. `?query=` works too:
-OPDS 2.0 requires a templated search link to name its parameter that.
+`?q=` on any book feed — `/opds/books`, and equally an author's, a subject's or
+a series' — which is the same parameter the shelf's own search box uses, so a
+URL can be carried between the two by hand. `?query=` works too: OPDS 2.0
+requires a templated search link to name its parameter that.
 
 The query rides along in the paging links, so page two of a search is still that
 search.
@@ -87,7 +88,8 @@ of metadata and nothing is inferred from a file name.
 - **The cover**, as both `image` and `image/thumbnail`. Those point at the same
   object because a published cover already *is* a 240px thumbnail.
 - **An `alternate` link to the browser reader**, for a client that would rather
-  hand a book to a browser than download it.
+  hand a book to a browser than download it. It opens the same format the
+  shelf's own Read button does — the EPUB, where a book is published as both.
 - Authors, publisher, publication date, language, subjects as categories, page
   count for a format that has one, and an identifier — named as an ISBN only
   when the sync tool checked its digit.
@@ -150,6 +152,10 @@ for, and a weak ETag. The body is a pure function of the catalog, the URL and
 the format, so the validator is derived from those rather than by hashing the
 response — which means a client refreshing a feed it already holds gets a 304
 without the server building the feed to find out.
+
+It also carries `Vary: Accept`, because the two versions share a URL and are
+told apart by that header alone. Without it a shared cache holding the Atom
+feed would go on handing it to clients that asked for JSON.
 
 A library that cannot be read answers `503` with `Retry-After` rather than an
 empty catalog. A client told 404 stops asking; one told 503 comes back, and an
