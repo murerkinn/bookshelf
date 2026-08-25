@@ -38,6 +38,31 @@ tree.
 There is no Workers cache in this mode, and none is needed: the catalog memo
 still spares the repeated reads, and the files are already local.
 
+## Encrypting the directory
+
+`directory` is a path and nothing more, so anything that presents itself as a
+filesystem will do — including an encrypted one. Point it inside a
+[gocryptfs](https://github.com/rfjakob/gocryptfs) or
+[Cryptomator](https://cryptomator.org) mount and the published library is
+ciphertext at rest, with no change to this app and no flag to set:
+
+```jsonc
+// bookshelf.config.json
+{ "storage": { "provider": "fs", "directory": "/mnt/shelf" } }
+```
+
+`put` hard-links where the filesystem allows it and copies where it does not, so
+a FUSE mount costs the copy and otherwise behaves as any other directory does.
+
+Be clear about what it buys, because it is easy to assume more. It protects a
+disk that is stolen, a backup that ends up somewhere it should not, and a host
+that can read your filesystem but is not running your app. It does not protect
+the library from the machine serving it: the mount is open exactly while the app
+is running, which is exactly when the app reads through it. And it does nothing
+for R2, where the storage is not a filesystem at all. The version that survives
+an untrusted host is [roadmap #18](../roadmap.md), and it is a different and
+much larger piece of work.
+
 ## Choosing wrong
 
 Building for Cloudflare and then starting the app on Node does not fail, which

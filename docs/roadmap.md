@@ -178,6 +178,27 @@ mechanism rather than the app hard-coding one:
 - **Per-profile passcodes** as a later refinement, once profiles mean something
   more than "whose bookmarks are these".
 
+Authentication answers *who*. There is a second question it does not touch,
+which is *how much*. Nothing bounds what one caller can cost: `/download/`
+serves whole books and answers ranged requests, so an instance on the open
+internet is a tap that a loop with `curl` can open. R2 charges nothing for
+egress, which takes the sting out of the bill but not out of the count — every
+range is a Class B operation and a Worker invocation. The shelf itself is
+cheap, because the catalog is memoised and the covers carry a day; the books
+are not.
+
+That is configuration rather than code, and it differs by deployment, so what
+it needs is a page rather than a module:
+
+- **Cloudflare** has the mechanism already: a rate-limiting rule on `/download/`
+  and `/book/`, and a WAF rule for whatever is not a browser. Worth writing down
+  with numbers in it, since "add a rate limit" is not advice anyone can act on.
+- **A reverse proxy** — `limit_req` in nginx, `rate_limit` in Caddy — for the
+  Docker and VPS cases, in the same place TLS termination already lives.
+
+Neither belongs in the app, and for the same reason in both: a limit enforced
+inside the Worker has already paid for the request that reached it.
+
 Whatever lands, `docs/` needs a page on it and the README's *Not done yet* gets
 shorter.
 
@@ -366,7 +387,8 @@ this is closer to essential than to nice, and it is a contained piece of work.
 
 ## Later
 
-Interop and scale — bigger, and each one arguably a project of its own.
+Interop, scale, and one change of shape — bigger, and each one arguably a
+project of its own.
 
 ### 13. An OPDS feed
 
@@ -431,6 +453,17 @@ provider's Node server grows an upload path and the Worker does not, or cover
 generation moves to WebAssembly, or an upload is accepted unprocessed and a
 later sync fills in the rest. Worth deciding before building.
 
+One thing has to land with it whichever way that goes. `readZipEntry` inflates
+an entry through `DecompressionStream` and believes the size the directory
+claims; nothing caps what comes out. Every archive the reader has ever been
+handed was put there by whoever runs the instance, so today that is a statement
+about trust rather than a hole — and an upload route is precisely the change
+that stops it being true. A few kilobytes that inflate to a few gigabytes is a
+ZIP's oldest trick, and in a Worker it is an isolate that dies rather than a
+request that fails. The cap belongs in `packages/core/src/zip.ts` beside the
+Zip64 refusal, which is already where that file decides an archive is more than
+it will take on.
+
 ### 17. Offline reading
 
 `manifest.ts` makes it installable; nothing makes it work on a plane. A service
@@ -438,6 +471,74 @@ worker plus explicit "keep this book on this device" — the archive, the cover,
 the catalog row — and positions that queue while offline and flush on
 reconnect. The reader already writes to `localStorage` before the network, so
 the position half is closer than it looks.
+
+### 18. A library the server cannot read
+
+Everything published is in the clear: the books, the covers, `catalog.json`, and
+the object keys, which are slugified titles and so name every book to anything
+that can list the bucket. What that fails to answer is not an attacker so much
+as the ordinary situation of keeping a media library on hardware belonging to
+somebody else. A bucket accidentally made public exposes all of it at once, a
+provider may scan what it stores, and a request served on the provider does not
+involve you at all.
+
+Encrypting it moves the trust boundary rather than adding a feature. Inside it:
+the sync tool, which runs on the operator's own machine, and the browser.
+Outside it: storage, and the app. The Worker becomes a pipe that hands out
+ciphertext and never holds a key.
+
+What that costs, which is most of the work:
+
+- **The shelf stops being server-rendered.** `page.tsx` renders `catalog.json`
+  and `CatalogService.search()` greps it in the isolate. Against a ciphertext
+  catalog both move into the browser — fine for hundreds of books, and exactly
+  the scale **#9** already describes for tens of thousands.
+- **`/book/[...path]` goes.** Reading one chapter out of an archive on two
+  ranged reads is the thing `docs/reader.md` is proudest of, and all of it is
+  server-side ZIP reading. The archive has to be opened in the browser instead.
+- **A cover stops being an `<img src>`.** A service worker that decrypts
+  `/cover/` keeps both the tag and the HTTP caching of the ciphertext; blob URLs
+  are the cruder way.
+- **Keys stop being names.** A slug names its book, so folder names become
+  HMACs — which changes the library format and the publish diff in `bucket.ts`.
+
+What keeps it from being a rewrite: the ZIP and PDF readers in `packages/core`
+are written against `ByteSource` and decompress through `DecompressionStream`
+rather than `node:zlib`, so both already run in a browser unchanged. Moving the
+unwrapping to the client is mostly a re-wiring of the composition root.
+
+Ranges have to survive, and that is the part which decides whether the readers
+regress. Encrypt in fixed-size chunks with a nonce each, map a byte range onto a
+chunk range, and a `PDFDataRangeTransport` that fetches and decrypts chunks
+keeps the 40 MB book that opens on a few 128 KB reads. Skip it and every format
+degrades to downloading the whole book before the first page — which is the
+behaviour **#2** and **#3** existed to remove.
+
+Keys: a passphrase through PBKDF2, which WebCrypto has and Argon2id would need
+WebAssembly for, wrapping a content key per file, with the salt and a
+verification blob in a `.bookshelf/vault.json` the CLI writes. The shape of
+Cryptomator's masterkey file, for the same reasons it has that shape.
+
+Two things worth saying out loud rather than discovering afterwards. The Worker
+serves the JavaScript that does the decryption, so this is trust-on-first-load
+the way every browser-delivered crypto app is: a real defence against the
+storage provider, a bucket left open, and a request served on the provider — and
+no defence at all against a compromised app host. It is strongest in the
+deployment where the operator runs the app and only the storage belongs to
+somebody else. And it is not authentication. It makes a stranger's GET return
+ciphertext, which is a different question from **#4**'s and does not answer it.
+
+It also argues with what is already planned. **#13** cannot work in an encrypted
+library, because KOReader cannot decrypt — so the two are modes rather than
+features, and the choice has to be named somewhere. **#16** gets harder in the
+same way cover generation already makes it hard.
+
+Available today, and worth documenting rather than building: `directory` is a
+path, so a gocryptfs or Cryptomator mount holds an encrypted library with no
+code at all — see
+[the filesystem provider](providers/fs.md#encrypting-the-directory). It protects
+a stolen disk and a curious host; it does nothing for R2, and nothing against
+the machine that is serving the library while the mount is open.
 
 ## Someday
 

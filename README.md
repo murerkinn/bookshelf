@@ -165,6 +165,11 @@ editing `wrangler.jsonc`.
 - **There is no authentication.** Anyone with the URL can read and download the
   whole library — and pick any profile while doing it. Profiles are a way to
   keep housemates' bookmarks apart, not a way to keep anyone out.
+- **Nothing is encrypted.** A library is published in the clear, so whoever
+  holds the storage can read every book in it, and the object keys are
+  slugified titles — a bucket listing names the shelf. With the filesystem
+  provider you can put the directory on an encrypted volume today; see
+  [encrypting the directory](docs/providers/fs.md#encrypting-the-directory).
 - Two devices reading as one profile at the same time is last-write-wins.
 
 ## Contributing

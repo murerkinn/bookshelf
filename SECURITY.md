@@ -32,3 +32,11 @@ to "an unauthenticated user can read the books" describes the design.
 
 **Whatever you put in a library is served.** The sync tool publishes what it is
 pointed at. Deciding what belongs in a public bucket is the operator's call.
+
+**A library is stored in the clear.** Books, covers and the catalog are
+published as they are, and the object keys are slugified titles — so whoever
+holds the storage can read the shelf, and so can anything able to list the
+bucket. That is the design today, not an oversight: see
+[roadmap #18](docs/roadmap.md) for what changing it would take, and
+[the filesystem provider](docs/providers/fs.md#encrypting-the-directory) for
+encrypting a library at rest without waiting for it.
