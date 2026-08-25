@@ -1,6 +1,6 @@
 {
   "input": "/books",
-  "output": "/library",
+  "output": "/data/library-build",
   "coverHeight": 240,
   "storage": {
     "provider": "fs",

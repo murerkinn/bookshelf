@@ -264,9 +264,11 @@ async function walk(root: string): Promise<string[]> {
  * its folder behind for good.
  */
 async function pruneEmpty(root: string, from: string): Promise<void> {
+  const sep = path.sep;
+  const rootWithSep = root + sep;
   let directory = path.dirname(from);
 
-  while (directory.startsWith(root) && directory !== root) {
+  while (directory !== root && directory.startsWith(rootWithSep)) {
     try {
       await rmdir(directory);
     } catch {
