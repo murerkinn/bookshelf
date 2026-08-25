@@ -202,7 +202,7 @@ function flatten(value: string): string {
  * all, and neither should be built on `Microsoft Word - doc1.docx`.
  *
  * Deliberately conservative: it takes real evidence to reject a title, so
- * something like `coyotiv-brochure-v1.3-web` is kept. It is ugly, but it is
+ * something like `acme-brochure-v1.3-web` is kept. It is ugly, but it is
  * what the document says it is called, and guessing past that costs more than
  * it returns.
  */
