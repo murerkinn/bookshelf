@@ -7,8 +7,8 @@ body:
     attributes:
       label: What are you trying to do
       description: >
-        The situation rather than the solution. It is easier to find a good
-        answer from the problem than from a proposed feature.
+        Describe the situation rather than the solution — it is easier to find
+        a good answer from the problem than from a proposed feature.
     validations:
       required: true
 
@@ -16,7 +16,7 @@ body:
     id: idea
     attributes:
       label: What you had in mind
-      description: If you have a shape in mind. Skip it if you do not.
+      description: If you have a shape in mind. Skip this if you do not.
 
   - type: markdown
     attributes:
@@ -25,5 +25,5 @@ body:
         packages resolved by name, so anyone can publish one and point
         `bookshelf.config.json` at it — see
         [Adding a storage provider](https://github.com/murerkinn/bookshelf/blob/main/CONTRIBUTING.md#adding-a-storage-provider).
-        Open an issue if the *contract* gets in the way of writing one; that is
-        the part worth changing.
+        Open an issue if the *contract* gets in your way — that is the part
+        worth changing.

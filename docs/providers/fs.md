@@ -1,80 +1,83 @@
 # The filesystem provider
 
-Holds the library in a directory. Needs no account and no network — for a machine on your own network, or a VPS you run the app on.
+Keeps your library in a directory. No account, no network, nothing to sign up
+for — for a machine on your own network, or a VPS you run the app on.
 
-The filesystem provider is what makes the app runnable on a machine you own — a
-box on your own network, or a VPS — with no account anywhere.
+## Setting it up
+
+Point the config at a directory:
 
 ```jsonc
 // bookshelf.config.json
 { "storage": { "provider": "fs", "directory": "shelf-data" } }
 ```
 
+Then publish and run:
+
 ```bash
-npm run sync -- --create   # publishes into shelf-data/
+npm run sync -- --create   # creates shelf-data/ and publishes into it
 npm run build
 npm start -w @bookshelf/app
 ```
 
-No environment variables: **`next.config.ts` reads the same
-`bookshelf.config.json` the sync tool reads, at build time, and bakes the
-provider into the bundle.** One file decides where the books go and where the
-app looks for them, which is the only way the two cannot disagree.
+Your shelf is on <http://localhost:3000>.
 
-It has to be build time rather than request time. On Workers there is no
-filesystem to read a config file from, and the two modes are different artifacts
-anyway — one Worker, one Node server. `BOOKSHELF_PROVIDER` and
-`BOOKSHELF_DIRECTORY` still override at startup, for a deployment whose library
-sits somewhere other than where it was built.
+| key | what it does |
+| --- | --- |
+| `directory` | where the published library lives. Relative paths resolve from the project root |
 
-`getServices()` imports each provider dynamically, because the two are not
-interchangeable at run time: one needs a Worker binding, the other a filesystem,
-and whichever the deployment lacks must never be loaded.
+Keep that directory out of your repository. `shelf-data/` is already gitignored.
 
-Keys arriving from URLs are resolved against the library root and rejected if
-they escape it, so `../` in a request cannot reach a file outside the published
-tree.
+## Rebuild after you change the config
 
-There is no Workers cache in this mode, and none is needed: the catalog memo
-still spares the repeated reads, and the files are already local.
+`bookshelf.config.json` is read at build time and baked into the bundle, so if
+you change `directory` you have to `npm run build` again before the app picks it
+up.
 
-## Encrypting the directory
+To point a running deployment somewhere else without rebuilding, set
+`BOOKSHELF_PROVIDER` and `BOOKSHELF_DIRECTORY` at startup. Those override what
+was baked in.
 
-`directory` is a path and nothing more, so anything that presents itself as a
-filesystem will do — including an encrypted one. Point it inside a
-[gocryptfs](https://github.com/rfjakob/gocryptfs) or
-[Cryptomator](https://cryptomator.org) mount and the published library is
-ciphertext at rest, with no change to this app and no flag to set:
+## Encrypting your library at rest
+
+`directory` is just a path, so put it inside an encrypted mount:
 
 ```jsonc
 // bookshelf.config.json
 { "storage": { "provider": "fs", "directory": "/mnt/shelf" } }
 ```
 
-`put` hard-links where the filesystem allows it and copies where it does not, so
-a FUSE mount costs the copy and otherwise behaves as any other directory does.
+[gocryptfs](https://github.com/rfjakob/gocryptfs) and
+[Cryptomator](https://cryptomator.org) both work. There's no flag to set and no
+change to the app.
 
-Be clear about what it buys, because it is easy to assume more. It protects a
-disk that is stolen, a backup that ends up somewhere it should not, and a host
-that can read your filesystem but is not running your app. It does not protect
-the library from the machine serving it: the mount is open exactly while the app
-is running, which is exactly when the app reads through it. And it does nothing
-for R2, where the storage is not a filesystem at all. The version that survives
-an untrusted host is [roadmap #18](../roadmap.md), and it is a different and
-much larger piece of work.
+**Know what this protects.** It covers a disk that gets stolen, a backup that
+ends up somewhere it shouldn't, and a host that can read your filesystem but
+isn't running your app. It does **not** protect your library from the machine
+serving it — the mount is open exactly while the app is reading through it. And
+it does nothing for R2, where your storage isn't a filesystem at all.
 
-## Choosing wrong
+Expect publishing to be slower into a FUSE mount: books are copied there rather
+than hard-linked.
 
-Building for Cloudflare and then starting the app on Node does not fail, which
-is the trap. `getCloudflareContext()` quietly returns a local development proxy,
-so the shelf renders — showing whatever the local miniflare bucket holds rather
-than what is in R2, and looking merely empty rather than misconfigured.
+## Troubleshooting
 
-The app detects that case (a Node process, in production, with no Cache API) and
-says so on startup. A Worker with no `BOOKS` binding, and a filesystem build
-with no directory, both fail outright with what to do about it.
+**Your shelf is empty and you built for Cloudflare.** Building for Cloudflare
+and then starting the app on Node doesn't fail outright — it shows you whatever
+the local miniflare bucket holds, which is usually nothing. The app detects this
+and says so at startup. Set `provider` to `fs` and run `npm run build` again.
 
-Because a directory can be walked, this provider implements every optional
-capability: `--force` empties the destination for real rather than falling back
-to the keys the last catalog recorded. Same flag as R2, same code path in the
-sync, a different guarantee — stated rather than assumed.
+**The app won't start, saying it has no directory.** A filesystem build with no
+directory configured fails deliberately rather than serving an empty shelf.
+Check `storage.directory` in your config, or `BOOKSHELF_DIRECTORY`.
+
+**Permission denied writing to the directory.** The app writes profiles and
+reading positions into `.bookshelf/` inside it. Make sure the user running the
+app owns it:
+
+```bash
+chown -R youruser /srv/bookshelf
+```
+
+If the directory genuinely can't be written to, the shelf still serves books —
+reading positions just stay in your browser.

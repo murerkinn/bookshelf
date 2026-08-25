@@ -1,31 +1,53 @@
 # The library format
 
-What the sync tool publishes, and what the app may assume about it. Both sides read the shape from `@bookshelf/core`, so neither can drift.
+What the sync tool writes, so you know what you're backing up and what you can
+safely change.
 
-The bucket is one folder per book, plus a generated catalog:
+## The layout
+
+One folder per book, plus a generated catalog:
 
 ```
 library/
-  essential-math-for-data-science/
-    metadata.json                          <- source of truth for this book
+  the-time-machine/
+    metadata.json          what the book says about itself
     cover.webp
-    essential-math-for-data-science.epub
-    essential-math-for-data-science.pdf    <- any number of formats
-  catalog.json                             <- derived, regenerable
-  .bookshelf/                              <- the app's, not the sync tool's
+    the-time-machine.epub
+    the-time-machine.pdf   any number of formats
+  catalog.json             generated from every metadata.json
+  .bookshelf/              written by the app, not the sync tool
     profiles.json
     progress/<profile>.json
 ```
 
-`metadata.json` holds what the book says about itself — title, authors,
-publisher, date, language, identifier, ISBN, description, subjects, series, and
-for a fixed-page format a page count — read out of the book rather than guessed
-from a file name. Every field but the title is optional, because a book that
-does not record something is the normal case rather than an error; see
-[metadata](publishing.md#metadata) for where each format keeps it and how far it
-is believed. `catalog.json` is only the concatenation of them, so it can be
-regenerated, or swapped for a different format entirely, without touching the
-library.
+Folder names are slugified titles, so a listing of your storage names your
+shelf.
 
-`.bookshelf/` is the one thing here the sync tool did not put there, and so
-the one thing it must never take away — see [profiles](profiles.md).
+## metadata.json
+
+Holds what the book records about itself: title, authors, publisher, date,
+language, identifier, ISBN, description, subjects, series, and a page count for
+formats that have one.
+
+Only the title is required. A book that doesn't record a publisher or a date is
+normal, not broken. For how each format stores this and how far it's trusted,
+see [publishing](publishing.md#what-ends-up-on-your-shelf).
+
+## catalog.json
+
+Generated from every `metadata.json` in the library. Delete it and the next
+`npm run sync` writes it again.
+
+## .bookshelf/
+
+Your profiles and reading positions. This is the only thing in the library the
+sync tool didn't put there, and it never removes it — not on a normal run, not
+with `--force`.
+
+## What to back up
+
+Back up your books, and back up `.bookshelf/`.
+
+Everything else regenerates. If you lose the library but still have your
+original files, `npm run sync` rebuilds all of it. If you lose `.bookshelf/`,
+everyone's reading positions are gone.

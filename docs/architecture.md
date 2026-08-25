@@ -1,228 +1,157 @@
 # Architecture
 
-The app talks to interfaces, never to Cloudflare. Porting it means writing adapters and one composition root, not touching the app.
+How the code is laid out, for when you're working on it. If you just want to run
+a shelf, you don't need this page.
 
 ## The repository
 
 ```
-apps/bookshelf       the app: a Next.js Worker over object storage
-packages/core        the library format, the ZIP reader, the provider contract
-packages/provider-r2 Cloudflare R2, both halves of it
-packages/provider-fs the library as a directory on disk
+apps/bookshelf       the app: a Next.js Worker, or a Node server
+packages/core        the library format, the readers, the provider contract
+packages/provider-r2 Cloudflare R2
+packages/provider-fs a directory on disk
 packages/sync        the CLI that builds a library and publishes it
-packages/fixtures    generated books, for tests and for the demo shelf
-tools/               one-off scripts: the demo shelf, the Gutenberg fetcher
-books/             books in       ) configured in bookshelf.config.json,
-library/           upload tree out)  both gitignored
+packages/fixtures    generated books, for tests and the demo shelf
+tools/               the demo shelf script
 ```
 
-A Turborepo workspace, so `packages/core` is built before anything that imports
-it and the app and the CLI can never drift apart on what a library looks like.
-Every package is TypeScript compiled by `tsc`; the app is compiled by Next.
-Tests live beside the code they exercise, as `test/*.test.ts` in each package,
-and Node runs them from source by stripping the types. The `.mjs` that is left
-is `tools/`, which is scripts, and one resolver hook the app's tests load.
+It's a Turborepo workspace, so `packages/core` builds before anything that
+imports it. Every package is TypeScript compiled by `tsc`; the app is compiled
+by Next. Tests live beside the code they exercise as `test/*.test.ts`, and Node
+runs them from source.
 
-One task in the graph is neither a build nor a test. `assets` copies pdf.js's
-worker, CMaps, standard fonts and WebAssembly out of `pdfjs-dist` into the app's
-`public/`, because pdf.js asks for those by URL at the moment it needs them and
-no bundler ever sees the request. Everything that serves the app — `build`,
-`dev`, `bundle`, `preview`, `deploy` — depends on it. It is uncached on purpose:
-the script stamps the version it copied, so a second run compares one file and
-exits, which is cheaper than restoring four megabytes from a cache.
+One task is neither a build nor a test: `assets` copies pdf.js's worker, CMaps,
+standard fonts and WebAssembly out of `pdfjs-dist` into the app's `public/`.
+Everything that serves the app depends on it. You never need to run it by hand.
+
+## The rule to keep
+
+**The app talks to interfaces, never to Cloudflare.** If you find yourself
+importing `@bookshelf/provider-*` anywhere except
+`apps/bookshelf/src/services/container.ts`, something has gone wrong.
 
 ## Services and ports
-
-The app talks to interfaces, never to Cloudflare. Porting it means writing
-adapters and one composition root, not touching the app.
 
 ```
 packages/core/src/
   provider.ts     the contract — Storage, StorageAdmin, the manifest
-  catalog.ts      the published shape — Book, Catalog, the file names, the
-                  version. Both sides import it, neither redeclares it.
-  state.ts        the written-back shape — Profile, Progress, and the
-                  reserved prefix they live under
+  catalog.ts      the published shape — Book, Catalog, file names, version
+  state.ts        the written-back shape — Profile, Progress, their prefix
   bytes.ts        ByteSource: size() and read(offset, length)
   zip.ts          the ZIP reader, written against ByteSource
+  pdf.ts          the PDF reader, likewise
 
 apps/bookshelf/src/services/
-  ports/
-    cache.ts      ResponseCache, plus a no-op for when there isn't one
-  adapters/
-    workers-cache.ts  the Workers Cache API
+  ports/cache.ts          ResponseCache, plus a no-op
+  adapters/workers-cache.ts
   catalog.ts      CatalogService — the shelf, from catalog.json
   content.ts      BookContentService — files from inside a book
   profiles.ts     ProfileService — who is reading
   progress.ts     ProgressService — how far they got
   errors.ts       the difference between absent and unreachable
-  session.ts      which profile a request belongs to, and how its cookie is set
+  session.ts      which profile a request belongs to
   container.ts    createServices() wires them; getServices() is the only
                   place that names a provider
 ```
 
-`createServices(storage, cache)` is the whole composition and is
-platform-agnostic. `getServices()` is the entry point, and `setServices()`
-replaces it with fakes in tests or with another runtime's implementations at
-startup.
+Use `setServices()` to substitute fakes in tests.
 
-Deliberately absent from `Storage`: `list`. The catalog is what enumerates the
-library, so no request may discover books by walking the bucket. Enumeration
-lives on `StorageAdmin`, which never runs in the app.
+Three constraints you need to respect when adding to this layer:
 
-Nor may a request name a key of its own. The three routes that serve bytes take
-theirs from the URL, so each puts it through `parseBookKey` first and answers
-`404` to anything that is not a file inside a book's folder. Without that the
-URL is a read of any object the provider will answer for — including the app's
-own state, which shares the library with the books: `.bookshelf/profiles.json`
-names everyone reading here and `.bookshelf/progress/<profile>.json` says what
-one of them reads and where they are. It is checked by shape rather than against
-the catalog so that a library whose catalog cannot be read still serves books.
-
-`write` and `remove` are on `Storage` but optional, because a provider may
-front a destination that genuinely cannot be written to. Callers narrow with
-`writableStorage()` and degrade rather than throwing, so a read-only library is
-a working shelf whose positions stay in the browser.
+- **`Storage` has no `list`.** The catalog enumerates the library, so no request
+  can discover books by walking the bucket. Enumeration lives on `StorageAdmin`,
+  which never runs in the app.
+- **Put every key from a URL through `parseBookKey`.** The three routes that
+  serve bytes do this and answer `404` to anything that isn't a file inside a
+  book's folder. Without it, a URL can read any object the provider will answer
+  for — including `.bookshelf/profiles.json`.
+- **Narrow with `writableStorage()` before writing.** `write` and `remove` are
+  optional on `Storage`. Degrade rather than throwing.
 
 ## Absent, or unreachable
 
-Every service tells three states apart, and the third is the one worth naming.
+Every service tells three states apart.
 
-**Present** is the ordinary case. **Absent** is ordinary too, and most of the
-app's care goes into it: an unpublished catalog is an empty shelf, a library with
-no profile file has one implicit profile, a book nobody has opened has no saved
-position, a corrupt file reads as though it were not there. None of those is an
-error, and none of them fails a page.
+**Present** and **absent** are both ordinary. An unpublished catalog is an empty
+shelf, a library with no profile file has one implicit profile, a book nobody
+opened has no saved position, a corrupt file reads as absent. None of these
+fails a page.
 
-**Unreachable** is storage that exists and is failing — a network blip, a bucket
-that has gone away, a disk that has. It used to arrive as whatever the provider
-happened to throw, which is indistinguishable from a bug and takes a page down
-with it. `LibraryUnavailableError` names it, so each caller can answer for
-itself, and the answers differ because the stakes do:
+**Unreachable** is storage that exists and is failing. It arrives as
+`LibraryUnavailableError`, and each caller answers for itself:
 
 | | when the library cannot be read |
 | --- | --- |
 | the catalog | the last one read, if there is one; otherwise the shelf says so |
-| profiles | refuses — see below |
+| profiles | refuses |
 | reading positions | none, and a save answers `false` |
-| a book's contents | refuses, and the route answers `503` rather than `404` |
+| a book's contents | refuses, and the route answers `503` |
 
-Reading positions degrade to nothing because that costs nothing: the reader
-reconciles whatever it is given against the copy the browser kept, newest wins,
-so a position missing from an answer is not a position lost. **Saving** is the
-opposite, and the one place degrading would lose data — the file holds every
-book a profile has open and is rewritten whole, so writing it after a failed
-read would replace all of those positions with one. A reader told `false` keeps
-its place locally and tries again; that is the same path a read-only library
-already takes.
+When you add a caller, follow that table. Reading positions degrade to nothing
+safely because the browser keeps a copy. Saving must not degrade — the file
+holds every book a profile has open and is rewritten whole, so writing after a
+failed read would replace all of them with one. Profiles must not degrade
+either, because falling back to the default would write one person's place into
+a file belonging to nobody.
 
-Profiles refuse rather than degrade for a related reason. The answer decides
-which file a position is written to, and falling back to the implicit default
-would resolve every reader to `default` — writing one person's place in a book
-into a file belonging to nobody. Failing to render is recoverable; quietly
-writing into the wrong file is not.
-
-The shelf then treats its reads by how much it needs them. The catalog is the
-page, so a failure there becomes a state that says the library is unreachable.
-Profiles and positions are not, so a failure there renders the shelf without a
-profile chip and without Continue buttons, and says which is missing. A `503`
-carries `Retry-After` and `no-store`, because the next request may well succeed
-and a cached outage outlives the outage.
-
-Anything that is *not* an unreachable library is left to throw, and reaches
-`app/error.tsx`. A page rendering less than it wanted to is a reasonable answer
-to an outage and a terrible one to a bug.
-
-The app names both providers with fixed specifiers and picks between them at
-startup; the CLI resolves its provider from config at run time, because a CLI
-is not bundled ahead of time. Same package either way —
-`@bookshelf/provider-r2/worker` for one, `@bookshelf/provider-fs/node` for the
-other.
-
-One ZIP reader serves both sides because they differ only in where the bytes
-come from: the CLI holds a whole book in memory, the app pulls one chapter at a
-time out of storage. Decompression goes through `DecompressionStream` rather
-than `node:zlib`, which is what lets the same code run in workerd and in Node.
+Anything that isn't `LibraryUnavailableError` should throw and reach
+`app/error.tsx`.
 
 ## The readers
 
 ```
 apps/bookshelf/src/app/read/[...key]/
-  page.tsx          picks a reader from the file's extension, and is the only
-                    place that knows there is more than one
-  position.ts       keeping a place: the browser's copy first, the library's
-                    after a pause, reconciled newest-wins on the way in. Shared,
-                    because only what a position *is* differs by format
+  page.tsx          picks a reader from the extension — the only place that
+                    knows there is more than one
+  position.ts       keeping a place, shared by both readers
   epub-reader.tsx   epub.js, pointed at the package document
-  pdf-reader.tsx    pdf.js: layout, zoom, tint, and the chrome around a page
-  pdf-page.tsx      one page — a box of the right shape, drawn when it is near
-  pdf-sidebar.tsx   contents and search, which are both lists of places to go
+  pdf-reader.tsx    pdf.js: layout, zoom, tint, chrome
+  pdf-page.tsx      one page
+  pdf-sidebar.tsx   contents and search
   pdf-search.ts     the scan, debounced and streamed
-  pdf-document.ts   every call into pdf.js that is not React: opening a
-                    document, its outline, its text, its text layer
+  pdf-document.ts   every call into pdf.js that is not React
 
-apps/bookshelf/src/lib/
-  local.ts          localStorage, for what belongs to a device rather than to a
-                    profile: a layout, a zoom, a tint, and the browser's copy of
-                    a position
+apps/bookshelf/src/lib/local.ts   localStorage: layout, zoom, tint, and the
+                                  browser's copy of a position
 ```
 
-Both readers are client components and both load their library with a dynamic
-`import()`, because epub.js and pdf.js each reach for `window` as they
-initialise and neither survives the server render. The server's part is small
-and the same either way: resolve who is reading, hand over their saved position,
-and say whether the library can be written to.
+Both readers are client components and load their library with a dynamic
+`import()` — epub.js and pdf.js each reach for `window` as they initialise and
+neither survives the server render.
 
-See [reading in the browser](reader.md) for what each reader does with that.
-
-## The catalog other readers browse
+## The OPDS catalog
 
 ```
 apps/bookshelf/src/app/opds/[[...path]]/route.ts   the whole route
 apps/bookshelf/src/lib/opds/
-  feed.ts         the model — shaped after OPDS 2.0, because that is the more
-                  general of the two versions and leaves Atom as the one
-                  translation step rather than a second model
+  feed.ts         the model, shaped after OPDS 2.0
   browse.ts       the groupings: by author, by subject, by series
-  xml.ts          escaping, and the characters XML 1.0 cannot carry at all
-  atom.ts         OPDS 1.2, and the OpenSearch description document
+  xml.ts          escaping
+  atom.ts         OPDS 1.2, and the OpenSearch document
   json.ts         OPDS 2.0
   serve.ts        the URL space, format negotiation, the ETag, the response
 ```
 
-One route for the whole protocol, because the serializers already have to
-generate every URL in that space to write their links — declaring it a second
-time in the filesystem would be two copies that can drift.
+**Don't import `next/headers` under `lib/opds/`.** `serveOpds` takes the shelf
+and the origin as parameters, which is what keeps every feed reachable from
+`test/opds.test.ts`. That's also why `siteOrigin()` lives in `lib/origin.ts`
+rather than in `lib/site.ts`.
 
-Nothing under `lib/opds/` imports `next/headers`. `serveOpds` takes the shelf it
-is serving and the origin to write links against, both as parameters, which is
-what puts every feed within reach of `test/opds.test.ts` — where they are parsed
-rather than pattern-matched. That constraint is also why `siteOrigin()` lives in
-`lib/origin.ts` rather than beside the site's name in `lib/site.ts`: one is
-request-scoped and the other is constants, and only the first needs a request
-around it.
-
-See [the OPDS catalog](opds.md) for what it serves and to whom.
-
-## Pages that are not showing a shelf
+## Error pages
 
 ```
 apps/bookshelf/src/app/
   state.tsx         the shared block: glyph, title, sentence, a way out
-  not-found.tsx     a URL that matches nothing, and notFound() from the reader
-  error.tsx         the route boundary — a bug, or an outage nobody accounted for
-  global-error.tsx  when the root layout itself is what failed
+  not-found.tsx     a URL that matches nothing
+  error.tsx         the route boundary
+  global-error.tsx  when the root layout itself failed
 ```
 
-`error.tsx` deliberately does not show the error's message: Next redacts it in
-production and hands over a digest instead, so anything shown would read as
-detail in development and as nothing in production. The digest is shown, since
-it is what ties what a reader saw to what the log recorded.
+`error.tsx` shows the digest rather than the message — Next redacts messages in
+production.
 
 ## Caching
 
-The catalog is held in an in-isolate memo backed by the Workers Cache API, for
-60 seconds — long enough that search keystrokes cost no I/O, short enough that a
-newly published catalog appears on its own. Covers carry `max-age=86400` with an
-ETag, so a re-uploaded cover becomes visible within the day and revalidation
-costs a 304 rather than a re-download.
+The catalog is held in an in-isolate memo backed by the Workers Cache API for 60
+seconds. Covers carry `max-age=86400` with an ETag. OPDS feeds carry
+`public, max-age=60`, a weak ETag, and `Vary: Accept`.

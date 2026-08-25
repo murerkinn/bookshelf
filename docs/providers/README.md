@@ -1,77 +1,68 @@
 # Storage providers
 
-Where a library lives is the one thing this project expects to be swapped. A provider is a package, named in `bookshelf.config.json`, and it does not have to be one of the two shipped here.
+A provider decides where your library lives. Two ship with the project, and you
+can install someone else's.
 
-A provider is a package, not a file in the CLI. `providers.mjs` maps the short
-ids to the packages shipped here and imports anything else as given, so a
-provider written by someone else needs nothing added: install it, name it in
-the config, done.
+## Choosing one
 
-Each provider has two faces, because the app and the CLI run in different places
-and want different things:
+| | [Cloudflare R2](r2.md) | [Filesystem](fs.md) |
+| --- | --- | --- |
+| your library lives in | an R2 bucket | a directory on disk |
+| the app runs as | a Cloudflare Worker | a Node server |
+| you need | a Cloudflare account | nothing |
+| costs | R2 pricing | nothing |
+| good for | reaching your shelf from anywhere | a machine on your own network, or a VPS |
 
+Pick `fs` if you want to own the whole thing and have somewhere to run it. Pick
+`r2` if you'd rather not run a server.
+
+## Setting one
+
+Name it in `bookshelf.config.json`:
+
+```jsonc
+{ "storage": { "provider": "fs", "directory": "shelf-data" } }
 ```
-@bookshelf/provider-r2           its manifest — id, options, capabilities
-@bookshelf/provider-r2/worker    Storage: head, read, readBytes, readRange,
-                                 and optionally write, remove
-@bookshelf/provider-r2/node      StorageAdmin: read, put, remove,
-                                 and optionally create, list, removeAll
+
+```jsonc
+{ "storage": { "provider": "r2", "bucket": "books" } }
 ```
 
-The manifest is importable without credentials or a runtime, which is what lets
-the CLI name a provider's settings, and the docs describe them, without
-connecting to anything.
+Everything under `storage` other than `provider` belongs to that provider. See
+its page for what it accepts.
 
-Entry points are named for the runtime they need rather than the face they
-implement. R2 splits across two, because the app reads it from workerd and the
-CLI writes it from Node. The filesystem provider has one, `/node`, because both
-of its halves need a filesystem — and that is the same fact as the app having to
-run on a machine that has one.
+## What each one can do
 
 | | `r2` | `fs` |
 | --- | --- | --- |
-| read | Worker binding | `node:fs` |
-| ranged read | binding `range` | `createReadStream` bounds |
-| publish | wrangler CLI | copies, hard-linked where it can |
-| `create` | `wrangler r2 bucket create` | `mkdir -p` |
-| `list` | — | walks the directory |
-| `removeAll` | — | empties the directory |
-| app can write | binding `put` | atomic rename |
-| credentials | a wrangler login | none |
+| serve books | yes | yes |
+| resume an interrupted download | yes | yes |
+| create the destination for you (`--create`) | yes | yes |
+| `--force` clears the destination completely | no — see below | yes |
+| the app can write profiles and positions | yes | yes |
+| credentials to set up | a `wrangler login` | none |
 
-`create`, `list` and `removeAll` are optional because providers genuinely differ
-in what their APIs offer, and the alternative to optionality is a provider that
-lies. The two shipped here differ in exactly that way, which is the point of
-having two.
+On R2, `--force` removes what the last catalog recorded rather than everything
+in the bucket, because wrangler can't list objects. If you've put things in that
+bucket by other means, `--force` won't touch them. The sync tool says which
+guarantee it gave you.
 
-## Serving part of an object
+## Using a third-party provider
 
-`read` takes an optional `range`, and it is a request rather than an
-instruction. A provider that honours it sets `range` on what it returns, naming
-the bytes the body actually holds; one that ignores the option returns the whole
-object and sets nothing.
+Install it and name it:
 
-That is what the download route reads to decide between `206` and `200`, and it
-means declining is safe: a provider written before ranges existed serves
-complete responses rather than partial ones mislabelled as complete. The
-alternative — trusting the request — turns any provider that does not implement
-ranges into one that lies about every body it sends.
+```bash
+npm install some-bookshelf-provider
+```
 
-Two rules for a provider that does implement them:
+```jsonc
+{ "storage": { "provider": "some-bookshelf-provider", "...": "..." } }
+```
 
-- **Clamp with `clampRange`.** The size the route measured and the object being
-  read are two separate reads, and republishing a book replaces the object at
-  the same key, so a range can be past the end by the time it is served. The
-  helper returns null when none of it can be answered, and a provider then
-  returns no body — which the route turns into a `416` naming the real length.
-- **Leave `size` alone.** It stays the size of the whole object even on a
-  partial read, because that is the number a `Content-Range` has to name. R2
-  works this way already; a provider that reports the length of the slice
-  instead will produce `Content-Range` headers that describe the wrong object.
+Anything that isn't `r2` or `fs` is imported as given, so there's nothing to
+register.
 
-## The two shipped here
+## Writing your own
 
-- [Cloudflare R2](r2.md) — a bucket, read from a Worker
-- [Filesystem](fs.md) — a directory, read from a Node server
-
-Writing one is covered in [CONTRIBUTING.md](../../CONTRIBUTING.md#adding-a-storage-provider).
+See [CONTRIBUTING.md](https://github.com/murerkinn/bookshelf/blob/main/CONTRIBUTING.md#adding-a-storage-provider).
+You don't have to contribute it back — a package published by anyone works.

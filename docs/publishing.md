@@ -1,17 +1,35 @@
 # Publishing a library
 
-The sync tool reads a folder of books, builds a library from what the books say about themselves, and uploads it through a provider.
+The sync tool reads a folder of books, builds a library from them, and uploads
+it to wherever you keep it.
 
-Drop books into `books/`, then:
+## Publish your books
+
+Put your EPUBs and PDFs in `books/`, then run:
 
 ```bash
-npm run sync                # build library/ and upload it
-npm run sync -- --force     # clear the bucket first
-npm run sync -- --dry-run   # build only, upload nothing
+npm run sync
 ```
 
-Directories, provider and bucket come from `bookshelf.config.json`, found by
-walking up from the working directory:
+If you ran `npm run demo` first, empty `books/` before adding your own — the
+generated titles would otherwise publish alongside them and be tedious to tell
+apart. (`npm run demo` refuses a folder that already has books in it, so the
+other order is safe.)
+
+That builds `library/` and uploads it. Two variations you'll want:
+
+```bash
+npm run sync -- --dry-run   # build it, upload nothing — check the result first
+npm run sync -- --force     # clear the destination, then upload
+```
+
+Run `--dry-run` the first time. It writes `library/` and prints what each book
+turned into, so you can see whether your titles and covers came out right before
+anything leaves your machine.
+
+## Configure where things go
+
+Create `bookshelf.config.json` in the project root:
 
 ```json
 {
@@ -27,120 +45,132 @@ walking up from the working directory:
 }
 ```
 
-Without a config file the conventional layout applies — `books/` in, `library/`
-out — so the defaults are what the file above spells out.
+| key | what it does |
+| --- | --- |
+| `input` | the folder your books are in. Default `books` |
+| `output` | where the built library is written. Default `library` |
+| `coverHeight` | cover thumbnail height in pixels. Default 240 |
+| `storage.provider` | `r2` or `fs`, or the name of a provider package you installed |
 
-Everything under `storage` except `provider` belongs to the provider and is
-passed to it untouched — the CLI does not know what any of those keys mean. What
-each one accepts is on its own page: [R2](providers/r2.md),
+You can skip the file entirely if you use the default layout — `books/` in,
+`library/` out.
+
+Everything under `storage` other than `provider` is passed straight to the
+provider. For what your provider accepts, see [R2](providers/r2.md) or
 [filesystem](providers/fs.md).
 
-The script reads each book once for its metadata and its cover, groups files
-sharing a name into one book with several formats, and hard-links book files
-into the tree, so publishing 763 MB of books costs about a megabyte of disk.
-What it reads out of a book, and how much of it to believe, is
-[metadata](#metadata) below.
+The tool looks for the config by walking up from wherever you run it, so you can
+run it from a subdirectory.
 
-Covers are thumbnailed to 240px WebP — a publisher cover is around a megabyte
-against a 40x60 slot, so this is the difference between a shelf costing 65 MB
-and one costing 0.5 MB.
+## Flags
 
-A plain run uploads everything and removes anything the previous catalog listed
-that the new one does not, so deleting a book locally deletes it remotely.
-`--force` clears first instead, for when the bucket has drifted out of step.
-Neither touches `.bookshelf/`: providers leave it out of what they enumerate,
-so clearing the library never clears everyone's bookmarks with it.
-
-| flag | |
+| flag | what it does |
 | --- | --- |
-| `--force` | clear the bucket before uploading |
+| `--force` | clear the destination before uploading |
 | `--dry-run` | build the tree, publish nothing |
 | `--local` | publish to the local miniflare bucket, for testing |
-| `--create` | provision the destination first, if the provider can |
-| `--provider NAME` | which provider to publish through (default `r2`) |
-| `--size N` | cover thumbnail height in pixels (default 240) |
+| `--create` | create the destination first, if your provider can |
+| `--provider NAME` | publish through a different provider than the config names |
+| `--size N` | cover thumbnail height in pixels |
 | `--full` | keep full-size covers instead of thumbnailing them |
 
-## Metadata
+## Adding and removing books
 
-Both formats are read, and neither is trusted very far.
+Add a book to `books/` and run `npm run sync` again. Delete one and run it
+again, and it disappears from your shelf too — a normal run removes anything the
+previous catalog listed that the new one doesn't.
 
-An **EPUB** keeps Dublin Core in its package document, and it is usually right:
-title, authors, publisher, date, language, identifier, description, subjects,
-and a series where Calibre or an EPUB 3 collection recorded one.
+Use `--force` when your destination has drifted out of step with what you expect
+— for instance after an upload failed halfway. It clears first instead of
+comparing.
 
-A **PDF** records the same things in two places and agrees with itself only
-sometimes. The XMP packet is Dublin Core and can hold a list where the older
-information dictionary holds one string — three authors as three authors rather
-than as one field with semicolons in it — so XMP is read first and the
-dictionary fills in field by field. A page count comes from the page tree.
+Neither one touches your profiles or reading positions. Those live in
+`.bookshelf/`, and nothing the sync tool does will remove them.
 
-Neither half is authoritative about the title, so both are tried in turn and the
-first plausible one wins. PDF writers fill that field in with whatever is to
-hand:
+## Give one book several formats
+
+Name the files the same thing:
+
+```
+books/
+  the-time-machine.epub
+  the-time-machine.pdf
+```
+
+Those become one book on your shelf, with both formats offered for download.
+
+## What ends up on your shelf
+
+Titles, authors, publishers and dates come out of the books themselves. Nothing
+is looked up online and nothing is guessed from a file name, so what you see is
+what your files say about themselves.
+
+**EPUB** metadata is usually right: title, authors, publisher, date, language,
+identifier, description, subjects, and a series if Calibre or an EPUB 3
+collection recorded one.
+
+**PDF** metadata is less reliable, because PDF writers fill the title field in
+with whatever is to hand. Titles that are obviously not titles get rejected:
 
 | recorded title | what happens |
 | --- | --- |
-| `Cloudflare DPA v6.4.docx` | rejected: a file name with its extension |
-| `Microsoft Word - contract.doc` | rejected: the program's doing |
-| `untitled`, `Slide 1`, blank | rejected: says nothing |
-| `resumepages`, for `resumepages.pdf` | rejected: the file's own name |
-| `Skia/PDF m149`, where that is also the producer | rejected: the tool's name |
-| `coyotiv-brochure-v1.3-web` | **kept** — ugly, but it is what the document calls itself |
+| `Acme DPA v6.4.docx` | rejected — a file name with its extension |
+| `Microsoft Word - acme-terms.doc` | rejected — the program's doing |
+| `untitled`, `Slide 1`, blank | rejected — says nothing |
+| `quarterlynotes`, for `quarterlynotes.pdf` | rejected — the file's own name |
+| `Skia/PDF m149`, where that is also the producer | rejected — the tool's name |
+| `acme-brochure-v1.3-web` | kept — ugly, but it's what the document calls itself |
 
-A rejected title falls through to the next place it might be recorded, and then
-to the file name — which is where a title came from before any of this, so the
-worst case is what used to be the only case.
+When a title is rejected, the next place it might be recorded is tried, and
+failing that the file name is used.
 
-Two things a PDF does not really have. Its **creation date** is when the *file*
-was written, which for a scan or a re-export is not when the book came out; it
-is published as the date only, since a second's precision about the wrong event
-is not worth keeping. And an **ISBN** is only recorded when a candidate's check
-digit is valid, because an identifier field holds whatever the publisher put
-there and an unverified ten-digit run would turn an internal catalogue number
-into an ISBN that nothing downstream could tell was invented.
+Two things to expect from PDFs:
 
-An **encrypted PDF** is the one case where metadata is missing for a reason
-rather than absent. The permissions-only encryption publishers apply leaves the
-structure readable and the strings ciphertext, and there is no decryption here,
-so nothing is reported rather than mojibake. `sync` marks those books
-`[encrypted, no metadata]`; they still publish, and still get a cover, because
-rendering the first page does not go through this reader.
+- **The date is the file's, not the book's.** A PDF records when the file was
+  written, which for a scan or a re-export isn't when the book came out. It's
+  published as a date without a time.
+- **An ISBN only appears if its check digit is valid.** Publishers put all kinds
+  of things in the identifier field, so unverified numbers are left off rather
+  than shown as an ISBN.
+
+### If a book imports wrongly
+
+Check what the book itself says first. For an EPUB, unzip it, find the `.opf`
+named in `META-INF/container.xml`, and look at its `<metadata>` block — that's
+exactly what the sync tool reads. If the title is wrong there, it'll be wrong on
+your shelf.
+
+If a book is marked `[encrypted, no metadata]`, it's a PDF with the
+permissions-only encryption some publishers apply. The book still publishes and
+still gets a cover; only its metadata is unavailable.
+
+Still stuck? [Open an issue](https://github.com/murerkinn/bookshelf/issues/new/choose)
+with that metadata block. Please don't attach the book.
 
 ## Covers
 
-Thumbnailing is done by external tools, and the sync tool degrades quietly
-without them — a shelf of untouched publisher covers costs around 65 MB against
-0.5 MB thumbnailed.
-
-| tool | for | absent |
-| --- | --- | --- |
-| `cwebp` (libwebp) | cover thumbnails | `sips` on macOS, otherwise covers are published full size |
-| `pdftoppm` (poppler) | covers out of PDFs | `sips` or `qlmanage` on macOS, otherwise PDFs get no cover |
+Covers are thumbnailed to 240px WebP. Install two tools and they'll come out
+right:
 
 ```bash
 brew install webp poppler        # macOS
 apt install webp poppler-utils   # Debian, Ubuntu
 ```
 
-The Docker image ships both, so nothing needs installing on that route.
+| tool | needed for | without it |
+| --- | --- | --- |
+| `cwebp` | cover thumbnails | `sips` on macOS, otherwise covers are published full size |
+| `pdftoppm` | covers from PDFs | `sips` or `qlmanage` on macOS, otherwise PDFs get no cover |
 
-## Where it runs
+Neither is required — the sync tool carries on without them — but a shelf of
+untouched publisher covers costs around 65 MB against 0.5 MB thumbnailed, so
+it's worth the two installs.
 
-```
-packages/sync/src/
-  sync.ts            the CLI
-  lib/
-    config.ts        bookshelf.config.json, resolved
-    epub.ts          metadata and cover extraction, from the package document
-    pdf.ts           metadata extraction, from XMP and the info dictionary
-    metadata.ts      the parts of that both formats share
-    images.ts        thumbnailing, and PDF first-page rendering
-    build.ts         builds library/
-    bucket.ts        works out what to upload and what to remove
-    providers.ts     resolves a provider by importing its package
-    util.ts          a worker pool, retries, and reading an unknown error
-```
+Use `--full` if you want the original covers kept at their own size.
 
-Built to `dist/` with `tsc`, like the other packages — so `npm run sync` compiles
-it first, and `npm run check-types` covers it.
+The Docker image ships both tools, so there's nothing to install on that route.
+
+## Disk space
+
+Book files are hard-linked into `library/` rather than copied, so publishing
+763 MB of books costs about a megabyte of disk.

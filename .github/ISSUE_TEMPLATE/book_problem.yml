@@ -6,8 +6,8 @@ body:
     attributes:
       value: |
         Metadata and covers are read out of each book's own package document,
-        so when one book is wrong it is usually that book's markup rather than
-        the library. These questions are the ones that tell them apart.
+        so when one book is wrong it is usually that book's markup rather
+        than the library. These questions tell the two apart.
 
         **Please do not attach the book itself** — it is almost certainly
         copyrighted. The metadata block below is enough.
