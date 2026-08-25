@@ -8,6 +8,7 @@ import {
   type StoredObject,
 } from "@bookshelf/core";
 import type { ResponseCache } from "@/services/ports/cache";
+import type { RateLimits } from "@/services/ports/limits";
 
 /**
  * A library in memory, implementing the provider contract.
@@ -245,4 +246,45 @@ export function must<T>(value: T | null | undefined, what = "value"): T {
     throw new Error(`expected a ${what}, got ${String(value)}`);
   }
   return value;
+}
+
+/**
+ * Limiters that remember what they were asked, and refuse after a while.
+ *
+ * The counts are how many of each allowance are left, so `{ r2: 0 }` is a
+ * visitor who has already used the minute up — which is the state worth
+ * testing, and the only one a test would otherwise have to make thirty requests
+ * to reach. `asked` is in order, because for a download the order is part of
+ * the contract: the cheap allowance is spent before the expensive one.
+ */
+export function recordingLimits({
+  r2 = Number.POSITIVE_INFINITY,
+  download = Number.POSITIVE_INFINITY,
+}: {
+  r2?: number;
+  download?: number;
+} = {}): {
+  asked: { allowance: "r2" | "download"; visitor: string }[];
+  limits: RateLimits;
+} {
+  const asked: { allowance: "r2" | "download"; visitor: string }[] = [];
+  const left = { r2, download };
+
+  const ask = async (
+    allowance: "r2" | "download",
+    visitor: string,
+  ): Promise<boolean> => {
+    asked.push({ allowance, visitor });
+    if (left[allowance] <= 0) return false;
+    left[allowance] -= 1;
+    return true;
+  };
+
+  return {
+    asked,
+    limits: {
+      allowsR2: (visitor) => ask("r2", visitor),
+      allowsDownload: (visitor) => ask("download", visitor),
+    },
+  };
 }

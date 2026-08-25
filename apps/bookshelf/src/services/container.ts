@@ -3,15 +3,19 @@ import {
   openWorkersCache,
   WorkersCache,
 } from "@/services/adapters/workers-cache";
+import { workersRateLimits } from "@/services/adapters/workers-rate-limit";
 import { CatalogService } from "@/services/catalog";
 import { BookContentService } from "@/services/content";
 import { NoopCache, type ResponseCache } from "@/services/ports/cache";
+import { NoLimits, type RateLimits } from "@/services/ports/limits";
 import { ProfileService } from "@/services/profiles";
 import { ProgressService } from "@/services/progress";
 
 export type Services = {
   storage: Storage;
   cache: ResponseCache;
+  /** What the routes ask before they reach for the bucket. */
+  limits: RateLimits;
   catalog: CatalogService;
   content: BookContentService;
   profiles: ProfileService;
@@ -23,14 +27,19 @@ export type Services = {
  * it knows nothing about any provider — give it storage backed by S3 or a
  * filesystem and the app works unchanged. Storage that cannot be written to
  * still composes; profiles and reading positions degrade rather than fail.
+ *
+ * Limits default to none for the same reason: a runtime that cannot count
+ * requests per visitor is one that does not need to.
  */
 export function createServices(
   storage: Storage,
   cache: ResponseCache,
+  limits: RateLimits = new NoLimits(),
 ): Services {
   return {
     storage,
     cache,
+    limits,
     catalog: new CatalogService(storage, cache),
     content: new BookContentService(storage, cache),
     profiles: new ProfileService(storage),
@@ -64,10 +73,15 @@ function refusesEdits(): boolean {
   return value === "1" || value === "true";
 }
 
-function compose(storage: Storage, cache: ResponseCache): Services {
+function compose(
+  storage: Storage,
+  cache: ResponseCache,
+  limits?: RateLimits,
+): Services {
   return createServices(
     refusesEdits() ? readOnlyStorage(storage) : storage,
     cache,
+    limits,
   );
 }
 
@@ -101,8 +115,9 @@ async function filesystemServices(): Promise<Services> {
   return compose(createStorage({ directory }), new NoopCache());
 }
 
-/** Said once per process, not once per request. */
+/** Both said once per process, not once per request. */
 let warnedAboutProxy = false;
+let warnedAboutLimits = false;
 
 /** The library in R2, read through the Worker binding. */
 async function cloudflareServices(): Promise<Services> {
@@ -149,12 +164,27 @@ async function cloudflareServices(): Promise<Services> {
     );
   }
 
+  // The bucket is only reachable through this Worker and the Worker is public,
+  // so what stops one visitor from spending the library's whole R2 allowance is
+  // the pair of bindings named here. Absent in local development, where there
+  // is no public anybody and the bindings are not bound.
+  const limits = workersRateLimits(env);
+  if (!limits && process.env.NODE_ENV === "production" && !warnedAboutLimits) {
+    warnedAboutLimits = true;
+    console.warn(
+      "bookshelf: no rate limiting bindings, so every request may reach R2 " +
+        "as often as it likes. Add the ratelimits entries for R2_RATE_LIMITER " +
+        "and DOWNLOAD_RATE_LIMITER to wrangler.jsonc.",
+    );
+  }
+
   return compose(
     createStorage(env.BOOKS),
     // Absent under `next dev`, which runs in Node rather than workerd.
     cache
       ? new WorkersCache(cache, (work) => ctx.waitUntil(work))
       : new NoopCache(),
+    limits ?? undefined,
   );
 }
 

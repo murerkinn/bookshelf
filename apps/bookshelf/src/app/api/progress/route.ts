@@ -1,3 +1,4 @@
+import { enforceR2RateLimit } from "@/lib/rate-limit";
 import { getServices } from "@/services/container";
 import { isUnavailable } from "@/services/errors";
 import { activeProfile } from "@/services/session";
@@ -53,7 +54,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "bookId is required" }, { status: 400 });
   }
 
-  const { catalog, progress } = await getServices();
+  const { catalog, progress, limits } = await getServices();
+
+  // After the body has been read and found to name a book, so a flood of
+  // malformed posts is answered 400 without spending anybody's allowance —
+  // and before the two reads and a write below, which are all of this route.
+  const limited = await enforceR2RateLimit(request, limits);
+  if (limited) return limited;
 
   try {
     // Checked against the catalog rather than trusted, so the progress file

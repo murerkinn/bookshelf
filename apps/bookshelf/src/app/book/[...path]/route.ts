@@ -1,6 +1,7 @@
 import { parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { entryContentType } from "@/lib/media";
+import { enforceR2RateLimit } from "@/lib/rate-limit";
 import { getServices } from "@/services/container";
 import { optional } from "@/services/errors";
 
@@ -49,11 +50,17 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const { content, cache } = await getServices();
+  const { content, cache, limits } = await getServices();
 
   const cacheKey = request.url;
   const hit = await optional(() => cache.match(cacheKey));
   if (hit) return hit;
+
+  // After the cache for the same reason as the covers: a reader moving through
+  // a book asks for one chapter after another, and the ones already held here
+  // cost the bucket nothing. What is left is a genuine read of the archive.
+  const limited = await enforceR2RateLimit(request, limits);
+  if (limited) return limited;
 
   // Null is a chapter this book does not have, which is a 404. A library that
   // could not be reached is not, and `serviceUnavailable` tells them apart.

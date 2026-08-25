@@ -1,6 +1,7 @@
 import { normaliseEtag, parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { imageContentType, isImage } from "@/lib/media";
+import { enforceR2RateLimit } from "@/lib/rate-limit";
 import { getServices } from "@/services/container";
 import { optional, reading } from "@/services/errors";
 
@@ -45,7 +46,7 @@ async function serve(
     return new Response("Not found", { status: 404 });
   }
 
-  const { storage, cache } = await getServices();
+  const { storage, cache, limits } = await getServices();
 
   // Keyed by URL rather than the Request: under OpenNext this handler receives
   // a NextRequest wrapper, which the Cache API cannot use as a key.
@@ -64,6 +65,13 @@ async function serve(
     }
     return hit;
   }
+
+  // After the cache, because a cover served from it never reaches the bucket.
+  // A shelf of twenty books asks this route twenty times for one page view, and
+  // charging a visitor for the nineteen the cache answered would spend their
+  // whole allowance on a page that touched R2 once.
+  const limited = await enforceR2RateLimit(request, limits);
+  if (limited) return limited;
 
   const found = await reading("a cover", () =>
     storage.read(objectKey, {
