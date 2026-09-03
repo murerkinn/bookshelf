@@ -48,7 +48,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@xmldom/xmldom": "^0.8.14",
+    "@xmldom/xmldom": "^0.8.15",
     "tailwindcss": "^4",
     "typescript": "^7.0.2",
     "wrangler": "^4.123.0"
