@@ -47,7 +47,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "@types/node": "^24"
+    "@types/node": "^24.13.4",
+    "typescript": "^7.0.2"
   }
 }
