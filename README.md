@@ -93,6 +93,10 @@ npm run deploy
 
 More in [the R2 provider](docs/providers/r2.md).
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Bookshelf/)
+
 ## Before you commit a library to it
 
 **There is no authentication.** Anyone who can reach your shelf can download
