@@ -13,6 +13,51 @@ const MAX_FIELD_LENGTH = 1024;
  */
 const MAX_PAGE = 1_000_000;
 
+/**
+ * The most a post is read before it is refused.
+ *
+ * The largest real one is a book id, a CFI and an href, each at most
+ * {@link MAX_FIELD_LENGTH} characters, plus a page number. Even with every
+ * field at full length in three-byte characters that is about 9 KiB, so this
+ * leaves room without leaving much. It is checked on the way in rather than
+ * after parsing: anybody can post here, and a body of a few megabytes costs
+ * the server many times that in memory once it is parsed.
+ */
+const MAX_BODY_BYTES = 16 * 1024;
+
+/**
+ * The body as text, or null if it is longer than `limit` bytes.
+ *
+ * A declared length is believed when it is too long, never when it is short:
+ * a chunked body declares nothing, and a lying one is caught by the count. The
+ * stream is cancelled once the count passes the limit, so the rest is never
+ * buffered.
+ */
+async function readBody(
+  request: Request,
+  limit: number,
+): Promise<string | null> {
+  if (Number(request.headers.get("content-length")) > limit) return null;
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return text + decoder.decode();
+
+    received += value.byteLength;
+    if (received > limit) {
+      void reader.cancel().catch(() => {});
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+}
+
 function field(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0
     ? value.slice(0, MAX_FIELD_LENGTH)
@@ -43,7 +88,11 @@ function pageNumber(value: unknown): number | undefined {
 export async function POST(request: Request) {
   let payload: unknown;
   try {
-    payload = await request.json();
+    const text = await readBody(request, MAX_BODY_BYTES);
+    if (text === null) {
+      return Response.json({ error: "too large" }, { status: 413 });
+    }
+    payload = JSON.parse(text);
   } catch {
     return Response.json({ error: "expected JSON" }, { status: 400 });
   }
