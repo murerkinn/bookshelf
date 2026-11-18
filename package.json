@@ -31,7 +31,10 @@
     "packages/*"
   ],
   "overrides": {
-    "@xmldom/xmldom": "^0.8.14"
+    "@xmldom/xmldom": "^0.8.15",
+    "@opennextjs/cloudflare": {
+      "glob": "^14.0.6"
+    }
   },
   "scripts": {
     "dev": "turbo run dev",
