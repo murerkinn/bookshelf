@@ -140,7 +140,7 @@ export async function syncLibrary(
   let done = 0;
   let failed = 0;
 
-  await pool(desired, concurrency, async (entry) => {
+  const upload = async (entry: Upload): Promise<void> => {
     try {
       await retry(() => admin.put(entry.key, entry.file, entry.contentType));
       done++;
@@ -149,7 +149,24 @@ export async function syncLibrary(
       failed++;
       log(`  fail   ${entry.key} (${messageOf(error).trim().split("\n")[0]})`);
     }
-  });
+  };
+
+  // The catalog goes last, once everything it describes has been attempted.
+  // Its date is the generation the shelf keys its response cache on, so a
+  // catalog that landed mid-run would let a request cache a replaced book's
+  // old bytes under the new generation, and nothing but the next publish would
+  // move it on.
+  //
+  // Published even when some uploads failed, as before. Withholding it would
+  // hold back every book that did upload for the sake of one that did not, and
+  // the failure is already named above; the next run retries it.
+  const catalog = desired.filter((entry) => entry.key === CATALOG_FILE);
+  await pool(
+    desired.filter((entry) => entry.key !== CATALOG_FILE),
+    concurrency,
+    upload,
+  );
+  for (const entry of catalog) await upload(entry);
 
   return { uploaded: done, removed, failed, exact };
 }

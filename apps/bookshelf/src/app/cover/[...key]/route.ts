@@ -2,13 +2,17 @@ import { normaliseEtag, parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { imageContentType, isImage } from "@/lib/media";
 import { enforceR2RateLimit } from "@/lib/rate-limit";
+import { responseCacheKey } from "@/lib/response-cache";
 import { getServices } from "@/services/container";
 import { optional, reading } from "@/services/errors";
 
 /**
  * A day, rather than `immutable`. Covers only change when one is re-uploaded to
- * correct it, and that correction should become visible without waiting a year
- * — the ETag below makes the revalidation a 304 rather than a re-download.
+ * correct it or its book is removed or replaced, and that should become visible
+ * without waiting a year — the ETag below makes the revalidation a 304 rather
+ * than a re-download. Only browsers, and any proxy in front of the Node server,
+ * hold a cover this long regardless: the response cache here moves on with the
+ * catalog (see `responseCacheKey`).
  */
 const MAX_AGE_SECONDS = 86400;
 
@@ -46,14 +50,16 @@ async function serve(
     return new Response("Not found", { status: 404 });
   }
 
-  const { storage, cache, limits } = await getServices();
+  const { catalog, storage, cache, limits } = await getServices();
 
-  // Keyed by URL rather than the Request: under OpenNext this handler receives
-  // a NextRequest wrapper, which the Cache API cannot use as a key.
-  const cacheKey = request.url;
+  // Keyed by a URL rather than the Request: under OpenNext this handler
+  // receives a NextRequest wrapper, which the Cache API cannot use as a key.
+  // And not this request's URL, so that a removed or replaced cover is not
+  // served from the cache after a publish.
+  const cacheKey = await responseCacheKey(request, catalog);
   const conditional = request.headers.get("if-none-match");
 
-  const hit = await optional(() => cache.match(cacheKey));
+  const hit = cacheKey ? await optional(() => cache.match(cacheKey)) : null;
   if (hit) {
     const etag = hit.headers.get("etag");
     if (
@@ -97,7 +103,9 @@ async function serve(
 
   headers.set("content-length", String(found.object.size));
   const response = new Response(found.body, { headers });
-  void optional(async () => cache.put(cacheKey, response.clone()));
+  if (cacheKey) {
+    void optional(async () => cache.put(cacheKey, response.clone()));
+  }
 
   return response;
 }
