@@ -14,7 +14,8 @@ import {
   ProfileService,
   ReadOnlyLibraryError,
 } from "../src/services/profiles.ts";
-import { memoryStorage } from "./lib/storage.ts";
+import { ProgressService } from "../src/services/progress.ts";
+import { memoryStorage, must } from "./lib/storage.ts";
 
 function profilesFile(profiles: unknown[]) {
   return { [PROFILES_FILE]: JSON.stringify({ version: 1, profiles }) };
@@ -274,4 +275,120 @@ test("a profile is removed even if clearing up after it fails", async () => {
     (await profiles.list()).map((p) => p.id),
     ["murat"],
   );
+});
+
+test("a deleted profile's id is never handed out again", async () => {
+  const library = memoryStorage(
+    profilesFile([profile("murat"), profile("guest", "Guest")]),
+  );
+  const profiles = new ProfileService(library.storage);
+
+  await profiles.remove("guest");
+  // Positions are filed under the id, so a new Guest given the old one would
+  // start from wherever the old Guest left off.
+  assert.equal((await profiles.create("Guest")).id, "guest-2");
+
+  // And it stays retired whatever happens to the list after.
+  await profiles.rename("murat", "Murat Erkin");
+  await profiles.remove("guest-2");
+  assert.equal((await profiles.create("Guest")).id, "guest-3");
+  assert.deepEqual(library.json<Profiles>(PROFILES_FILE).retired, [
+    "guest",
+    "guest-2",
+  ]);
+});
+
+test("positions left behind by a failed cleanup reach nobody", async () => {
+  const library = memoryStorage({
+    ...profilesFile([profile("murat"), profile("guest")]),
+    [progressFile("guest")]: '{"version":1,"books":{"a-book":{"cfi":"old"}}}',
+  });
+  const profiles = new ProfileService(library.storage);
+  const progress = new ProgressService(library.storage);
+
+  const remove = library.storage.remove;
+  library.storage.remove = async () => {
+    throw new Error("delete exploded");
+  };
+  await profiles.remove("guest");
+  library.storage.remove = remove;
+  assert.equal(library.has(progressFile("guest")), true);
+
+  const created = await profiles.create("Guest");
+  assert.notEqual(created.id, "guest");
+  assert.deepEqual(await progress.all(created.id), {});
+});
+
+test("a page turn that lands after its profile was deleted reaches nobody", async () => {
+  const library = memoryStorage(
+    profilesFile([profile("murat"), profile("guest")]),
+  );
+  const profiles = new ProfileService(library.storage);
+  const progress = new ProgressService(library.storage);
+
+  // A save that resolved its profile before the deletion, and writes after it.
+  const write = must(library.storage.write, "write");
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  library.storage.write = async (key, bytes, contentType) => {
+    if (key === progressFile("guest")) await held;
+    return write(key, bytes, contentType);
+  };
+
+  const saving = progress.save("guest", "a-book", { cfi: "in flight" });
+  await profiles.remove("guest");
+  release();
+  assert.equal(await saving, true);
+  library.storage.write = write;
+
+  // The orphan is there, and nothing could have seen it at the time of the
+  // deletion. Only remembering the id keeps it from being handed out again.
+  assert.equal(library.has(progressFile("guest")), true);
+  const created = await profiles.create("Guest");
+  assert.notEqual(created.id, "guest");
+  assert.deepEqual(await progress.all(created.id), {});
+});
+
+test("an orphan from before ids were retired still keeps its id", async () => {
+  // A profile file that predates the retired list, beside the positions a
+  // deleted profile left behind. Nothing records the id, but the file does.
+  const library = memoryStorage({
+    ...profilesFile([profile("murat")]),
+    [progressFile("guest")]: '{"version":1,"books":{"a-book":{"cfi":"old"}}}',
+  });
+  const profiles = new ProfileService(library.storage);
+  const progress = new ProgressService(library.storage);
+
+  const created = await profiles.create("Guest");
+  assert.equal(created.id, "guest-2");
+  assert.deepEqual(await progress.all(created.id), {});
+});
+
+test("no id is allocated while storage cannot say whether it was used", async () => {
+  const library = memoryStorage(profilesFile([profile("murat")]));
+  const profiles = new ProfileService(library.storage);
+  library.fail("head");
+
+  // Assuming there is no file is how one reader's positions reach another.
+  await assert.rejects(profiles.create("Guest"), LibraryUnavailableError);
+  assert.deepEqual(library.writes, []);
+});
+
+test("the retired list is bounded", async () => {
+  const library = memoryStorage({
+    [PROFILES_FILE]: JSON.stringify({
+      version: 1,
+      profiles: [profile("murat"), profile("guest")],
+      retired: Array.from({ length: 70 }, (_, i) => `gone-${i}`),
+    }),
+  });
+  const profiles = new ProfileService(library.storage);
+
+  // The file is read on every render, and anyone can delete.
+  await profiles.remove("guest");
+  const retired = must(library.json<Profiles>(PROFILES_FILE).retired);
+  assert.equal(retired.length, 64);
+  assert.equal(retired.at(-1), "guest");
 });

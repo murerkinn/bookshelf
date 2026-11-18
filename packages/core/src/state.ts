@@ -56,6 +56,12 @@ export type Profile = {
 export type Profiles = {
   version: number;
   profiles: Profile[];
+  /**
+   * Ids of deleted profiles, which are never handed out again. Optional, so a
+   * file written before it existed reads as having retired nothing — which is
+   * also why adding it did not move {@link STATE_VERSION}.
+   */
+  retired?: string[];
 };
 
 /**

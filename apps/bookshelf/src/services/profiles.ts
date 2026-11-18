@@ -20,6 +20,15 @@ export type { Profile } from "@bookshelf/core";
 const MAX_PROFILES = 16;
 const MAX_NAME_LENGTH = 40;
 
+/**
+ * How many deleted ids the profile file remembers. The list only has to
+ * outlast a page turn that was already on its way when its profile was
+ * deleted; anything older that left a file behind is caught by looking for the
+ * file. Bounded because this file is read on every render, and deleting is
+ * something anyone who can reach the shelf can do as often as they like.
+ */
+const MAX_RETIRED = 64;
+
 /** Thrown when a change is asked of a library the app cannot write to. */
 export class ReadOnlyLibraryError extends Error {
   constructor() {
@@ -45,18 +54,17 @@ function slug(name: string): string {
     .slice(0, 32);
 }
 
-function uniqueId(name: string, taken: Set<string>): string {
+/** The ids a profile with this name could have, most readable first. */
+function* candidateIds(name: string): Generator<string> {
   const base = slug(name);
   const candidate = isProfileId(base) ? base : "reader";
-  if (!taken.has(candidate)) return candidate;
+  yield candidate;
 
-  for (let n = 2; n < 1000; n++) {
-    const next = `${candidate}-${n}`;
-    if (!taken.has(next)) return next;
-  }
-
-  throw new Error("could not allocate a profile id");
+  for (let n = 2; n < 1000; n++) yield `${candidate}-${n}`;
 }
+
+/** What the profile file holds, with the implicit default not yet filled in. */
+type Stored = { profiles: Profile[]; retired: string[] };
 
 export function cleanName(value: unknown): string {
   const name =
@@ -85,8 +93,7 @@ export class ProfileService {
   }
 
   async list(): Promise<Profile[]> {
-    const stored = await this.stored();
-    return stored.length > 0 ? stored : [defaultProfile()];
+    return (await this.state()).profiles;
   }
 
   /**
@@ -103,21 +110,24 @@ export class ProfileService {
   }
 
   async create(name: string): Promise<Profile> {
-    const profiles = await this.list();
+    const { profiles, retired } = await this.state();
     if (profiles.length >= MAX_PROFILES) {
       throw new Error(`A library holds at most ${MAX_PROFILES} profiles.`);
     }
 
     const cleaned = cleanName(name) || "Reader";
     const profile: Profile = {
-      id: uniqueId(cleaned, new Set(profiles.map((p) => p.id))),
+      id: await this.unusedId(
+        cleaned,
+        new Set([...profiles.map((p) => p.id), ...retired]),
+      ),
       name: cleaned,
       createdAt: new Date().toISOString(),
     };
 
     // `profiles` may be the implicit default, which is persisted here for the
     // first time — a library with two profiles has to record both.
-    await this.save([...profiles, profile]);
+    await this.save([...profiles, profile], retired);
     return profile;
   }
 
@@ -125,37 +135,76 @@ export class ProfileService {
     const cleaned = cleanName(name);
     if (!cleaned) throw new Error("A profile needs a name.");
 
-    const profiles = await this.list();
+    const { profiles, retired } = await this.state();
     if (!profiles.some((profile) => profile.id === id)) return;
 
     await this.save(
       profiles.map((profile) =>
         profile.id === id ? { ...profile, name: cleaned } : profile,
       ),
+      retired,
     );
   }
 
   /** Removes a profile and everything it had read. Never the last one. */
   async remove(id: string): Promise<void> {
-    const profiles = await this.list();
+    const { profiles, retired } = await this.state();
     if (profiles.length <= 1) {
       throw new Error("A library keeps at least one profile.");
     }
     if (!profiles.some((profile) => profile.id === id)) return;
 
-    await this.save(profiles.filter((profile) => profile.id !== id));
+    await this.save(
+      profiles.filter((profile) => profile.id !== id),
+      [...retired, id].slice(-MAX_RETIRED),
+    );
 
     // Best effort, and deliberately after the list was written: the profile is
     // gone either way, and failing here would report that the removal did not
-    // happen when it did. What is left behind is an orphan file that the next
-    // profile to be allocated this id would inherit — which is why the id
-    // allocator never reuses one that is taken.
+    // happen when it did. What is left behind is an orphan file, which no later
+    // profile inherits because the id it answers to is never handed out again.
     const target = writableStorage(this.storage);
     await optional(() => target?.remove(progressFile(id)) ?? Promise.resolve());
   }
 
   /**
-   * The profile file, or an empty list where there is none.
+   * An id derived from the name that no profile has had before.
+   *
+   * Not merely one no profile has now. Positions are filed under the id alone,
+   * so an id handed out twice gives the second profile whatever the first left
+   * behind — and something can be left behind: the cleanup in {@link remove}
+   * is best effort, and a page turn that resolved the old profile before it was
+   * deleted can land its write afterwards. So an id is passed over while it is
+   * live, while it is recorded as retired, and while a progress file still
+   * answers to it. The file check covers ids retired before the list existed or
+   * since fallen off the end of it; the list covers the write that has not
+   * landed yet, which no check for a file could see.
+   */
+  private async unusedId(name: string, taken: Set<string>): Promise<string> {
+    for (const candidate of candidateIds(name)) {
+      if (taken.has(candidate)) continue;
+
+      // Refused rather than guessed when storage cannot say: assuming there is
+      // no file is exactly how one reader's positions reach another.
+      const orphan = await reading("a reading position", () =>
+        this.storage.head(progressFile(candidate)),
+      );
+      if (!orphan) return candidate;
+    }
+
+    throw new Error("could not allocate a profile id");
+  }
+
+  /** The profiles, the implicit default among them, and the retired ids. */
+  private async state(): Promise<Stored> {
+    const stored = await this.stored();
+    return stored.profiles.length > 0
+      ? stored
+      : { ...stored, profiles: [defaultProfile()] };
+  }
+
+  /**
+   * The profile file, or an empty one where there is none.
    *
    * Storage that cannot be read is *not* treated as an empty list, unlike
    * almost everywhere else in the app. The reason is that the answer decides
@@ -165,37 +214,47 @@ export class ProfileService {
    * position it displaced would be gone. Failing to render the shelf is
    * recoverable; quietly writing into the wrong file is not.
    */
-  private async stored(): Promise<Profile[]> {
+  private async stored(): Promise<Stored> {
     const bytes = await reading("the profile list", () =>
       this.storage.readBytes(PROFILES_FILE),
     );
-    if (!bytes) return [];
+    if (!bytes) return { profiles: [], retired: [] };
 
     try {
       const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Profiles;
-      return (parsed.profiles ?? []).filter(
-        (profile) =>
-          typeof profile?.id === "string" &&
-          isProfileId(profile.id) &&
-          typeof profile.name === "string",
-      );
+      return {
+        profiles: (parsed.profiles ?? []).filter(
+          (profile) =>
+            typeof profile?.id === "string" &&
+            isProfileId(profile.id) &&
+            typeof profile.name === "string",
+        ),
+        retired: Array.isArray(parsed.retired)
+          ? parsed.retired.filter(
+              (id) => typeof id === "string" && isProfileId(id),
+            )
+          : [],
+      };
     } catch {
       // A corrupt profile file should not take the shelf down with it: the
       // library still reads, and the implicit default takes over.
-      return [];
+      return { profiles: [], retired: [] };
     }
   }
 
-  private async save(profiles: Profile[]): Promise<void> {
+  private async save(profiles: Profile[], retired: string[]): Promise<void> {
     const target = writableStorage(this.storage);
     if (!target) throw new ReadOnlyLibraryError();
 
+    // Left out while empty, so a library nobody has deleted from keeps writing
+    // the file it always did.
+    const file: Profiles = {
+      version: STATE_VERSION,
+      profiles,
+      ...(retired.length > 0 ? { retired } : {}),
+    };
     await writing("the profile list", () =>
-      target.write(
-        PROFILES_FILE,
-        encode({ version: STATE_VERSION, profiles } satisfies Profiles),
-        "application/json",
-      ),
+      target.write(PROFILES_FILE, encode(file), "application/json"),
     );
   }
 }
