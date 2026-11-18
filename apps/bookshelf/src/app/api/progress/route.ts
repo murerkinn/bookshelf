@@ -162,7 +162,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "no such book" }, { status: 404 });
     }
 
+    // The reader says which profile it was opened for, and that has to be the
+    // one this browser is reading as now. They part when the cookie is switched
+    // in another tab, or names a profile deleted from another device and so
+    // falls back to the first: a reader left open would otherwise write its
+    // place into the file of somebody who never opened the book. The fallback
+    // is right for a page being rendered and wrong for a write, which is why it
+    // is checked here rather than changed.
     const profile = await activeProfile();
+    if (field(body.profileId) !== profile.id) {
+      return Response.json({ saved: false }, { status: 409 });
+    }
+
     const saved = await progress.save(profile.id, bookId, {
       cfi: field(body.cfi),
       href: field(body.href),
