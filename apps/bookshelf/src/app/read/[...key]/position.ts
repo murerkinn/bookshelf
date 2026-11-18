@@ -105,7 +105,9 @@ export function useReadingPosition({
       if (!position || !canSync) return;
       pending.current = null;
 
-      const body = JSON.stringify({ bookId, ...position });
+      // Who this reader was opened for travels with the position, so a cookie
+      // that has since moved on to another profile does not take it with it.
+      const body = JSON.stringify({ bookId, profileId, ...position });
 
       // On the way out there is no time for a normal request to finish, and a
       // beacon is the only kind the browser promises to deliver.
@@ -126,7 +128,7 @@ export function useReadingPosition({
         // The browser copy is still correct; the next pause tries again.
       });
     },
-    [bookId, canSync],
+    [bookId, profileId, canSync],
   );
 
   // Held in a ref so that a reader whose own effects depend on `record` is not
