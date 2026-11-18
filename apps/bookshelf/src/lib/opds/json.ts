@@ -1,6 +1,6 @@
 import { type Book, bookKey, contentTypeFor } from "@bookshelf/core";
 import { encodeKey } from "@/lib/http";
-import { imageContentType } from "@/lib/media";
+import { coverContentType } from "@/lib/media";
 import {
   ACQUISITION,
   bookId,
@@ -101,7 +101,7 @@ function publication(
         : []),
     ],
     images: cover
-      ? [{ href: asset(cover), type: imageContentType(cover) }]
+      ? [{ href: asset(cover), type: coverContentType(cover) }]
       : undefined,
   });
 }

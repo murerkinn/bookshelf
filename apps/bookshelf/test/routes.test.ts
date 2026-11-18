@@ -464,6 +464,49 @@ test("a chapter is cached for a sitting, not a week", async () => {
   assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
 });
 
+/**
+ * A cover URL opened on its own is a page of this origin, and the type the
+ * bucket holds was chosen by whoever wrote the object. Sync never stores an
+ * active one, but the bucket is not necessarily only ever written by sync.
+ */
+test("a cover is served as the image its name says, whatever was stored", async () => {
+  const markup = "<script>fetch('/api/progress')</script>";
+  const memory = memoryStorage(
+    {
+      "dracula/cover.png": markup,
+      "dracula/cover.gif": markup,
+      "dracula/cover.svg": `<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`,
+    },
+    {
+      contentTypes: {
+        "dracula/cover.png": "text/html",
+        "dracula/cover.gif": "image/svg+xml",
+        "dracula/cover.svg": undefined,
+      },
+    },
+  );
+  setServices(createServices(memory.storage, nullCache()));
+
+  const png = await ask(cover, "dracula/cover.png");
+  assert.equal(png.status, 200);
+  assert.equal(png.headers.get("content-type"), "image/png");
+
+  const gif = await ask(cover, "dracula/cover.gif");
+  assert.equal(gif.headers.get("content-type"), "image/gif");
+
+  // SVG can carry script, so it is not a cover at all.
+  assert.equal((await ask(cover, "dracula/cover.svg")).status, 404);
+});
+
+test("a cover opened on its own may run nothing", async () => {
+  library();
+  const csp = (await ask(cover, COVER)).headers.get("content-security-policy");
+  const directives = (csp ?? "").split(";").map((part) => part.trim());
+
+  assert.ok(directives.includes("sandbox"), csp ?? "no policy");
+  assert.ok(directives.includes("default-src 'none'"), csp ?? "no policy");
+});
+
 test("a bug is not dressed up as an outage", () => {
   const bug = new TypeError("undefined is not a function");
   assert.throws(() => serviceUnavailable(bug), bug);
