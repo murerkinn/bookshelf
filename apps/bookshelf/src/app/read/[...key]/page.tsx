@@ -116,9 +116,16 @@ export default async function ReadPage(props: PageProps<"/read/[...key]">) {
         // Anything else is handed to the browser's own viewer, which for a
         // format this app has no reader for is better than nothing. The inline
         // disposition is what stops it downloading instead of displaying.
+        //
+        // Sandboxed, so a type `/download` was wrong to inline still runs
+        // nothing here. A PDF would not survive that, since Chrome will not
+        // draw one in a sandboxed frame, but a `.pdf` never comes this way:
+        // it has a reader of its own. What the browser cannot display arrives
+        // as an attachment, which is what `allow-downloads` keeps working.
         <iframe
           src={`/download/${encodeKey(fileKey)}?inline=1`}
           title={book.title}
+          sandbox="allow-downloads"
           className="flex-1 border-0"
         />
       )}

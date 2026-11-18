@@ -44,7 +44,20 @@ export type MemoryLibrary = {
 
 export function memoryStorage(
   objects: Record<string, string | Uint8Array> = {},
-  { writable = true, failing = false } = {},
+  {
+    writable = true,
+    failing = false,
+    contentTypes = {},
+  }: {
+    writable?: boolean;
+    failing?: boolean;
+    /**
+     * The type stored with an object, where it is not the one sync would have
+     * given it — or `undefined`, for one stored with none. A bucket written by
+     * something other than sync can hold either.
+     */
+    contentTypes?: Record<string, string | undefined>;
+  } = {},
 ): MemoryLibrary {
   // Either every operation or a named few, because which ones fail is the whole
   // question in places: a read that fails while writes still work is how a
@@ -74,7 +87,9 @@ export function memoryStorage(
     // Derived from the contents, so replacing an object changes its validator.
     etag: `"${bytesAt(key).byteLength.toString(16)}-${bytesAt(key)[0] ?? 0}"`,
     uploadedAt: new Date(0),
-    contentType: contentTypeFor(key),
+    contentType: Object.hasOwn(contentTypes, key)
+      ? contentTypes[key]
+      : contentTypeFor(key),
   });
 
   const asArrayBuffer = (bytes: Uint8Array): Uint8Array<ArrayBuffer> =>

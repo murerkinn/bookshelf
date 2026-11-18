@@ -207,6 +207,84 @@ test("?inline is honoured for what the browser can render, and refused for the r
   assert.equal(html.headers.get("x-content-type-options"), "nosniff");
 });
 
+/**
+ * The check and the header have to agree on what the type is. A browser reads
+ * a comma as a list of types and takes the last, so a stored type that is
+ * plain text up to its first `;` can still be HTML by the time it is rendered.
+ */
+test("what is served inline is the type that was checked", async () => {
+  const script = "<script>fetch('/api/progress')</script>";
+  const memory = memoryStorage(
+    {
+      "dracula/list.txt": script,
+      "dracula/charset.txt": script,
+      "dracula/pdf-list.pdf": script,
+      "dracula/plain.txt": TEXT,
+    },
+    {
+      contentTypes: {
+        "dracula/list.txt": "text/plain;a=b, text/html",
+        "dracula/charset.txt": "text/plain; charset=utf-8, text/html",
+        "dracula/pdf-list.pdf": "application/pdf;x=1,text/html",
+        "dracula/plain.txt": 'TEXT/Plain; format=flowed; charset="UTF-8"',
+      },
+    },
+  );
+  setServices(createServices(memory.storage, nullCache()));
+
+  for (const key of [
+    "dracula/list.txt",
+    "dracula/charset.txt",
+    "dracula/pdf-list.pdf",
+  ]) {
+    const response = await ask(download, key, { query: "?inline=1" });
+    assert.match(
+      response.headers.get("content-disposition") ?? "",
+      /^attachment; /,
+      key,
+    );
+  }
+
+  // A type that passes is sent as checked, with nothing of the stored value
+  // carried over but an encoding.
+  const plain = await ask(download, "dracula/plain.txt", {
+    query: "?inline=1",
+  });
+  assert.match(plain.headers.get("content-disposition") ?? "", /^inline; /);
+  assert.equal(plain.headers.get("content-type"), "text/plain; charset=UTF-8");
+});
+
+/**
+ * Behind the type and the disposition, a policy that lets nothing run. Not for
+ * a PDF shown inline, which Chrome will not draw in a sandboxed document.
+ */
+test("a download may run nothing, and an inline PDF may still be drawn", async () => {
+  const memory = memoryStorage(
+    { "dracula/dracula.pdf": TEXT, "dracula/dracula.txt": TEXT },
+    { contentTypes: { "dracula/dracula.txt": "text/plain" } },
+  );
+  setServices(createServices(memory.storage, nullCache()));
+
+  const text = await ask(download, "dracula/dracula.txt", {
+    query: "?inline=1",
+  });
+  assert.match(text.headers.get("content-disposition") ?? "", /^inline; /);
+
+  for (const response of [
+    text,
+    await ask(download, "dracula/dracula.txt"),
+    await ask(download, "dracula/dracula.pdf"),
+  ]) {
+    assert.equal(response.headers.get("content-security-policy"), "sandbox");
+  }
+
+  const pdf = await ask(download, "dracula/dracula.pdf", {
+    query: "?inline=1",
+  });
+  assert.match(pdf.headers.get("content-disposition") ?? "", /^inline; /);
+  assert.equal(pdf.headers.get("content-security-policy"), null);
+});
+
 test("bytes are served as the type they were stated to be", async () => {
   library();
   assert.equal(

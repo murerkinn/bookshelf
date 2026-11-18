@@ -28,10 +28,38 @@ import { reading } from "@/services/errors";
  */
 const INLINE_CONTENT_TYPES = new Set(["application/pdf", "text/plain"]);
 
-function mayInline(contentType: string): boolean {
-  return INLINE_CONTENT_TYPES.has(
-    contentType.split(";")[0].trim().toLowerCase(),
-  );
+/** A `charset` parameter naming an encoding, and nothing else besides. */
+const CHARSET = /^charset=(?:"([\w.:-]+)"|([\w.:-]+))$/i;
+
+/**
+ * The type to serve an object inline as, or null if it is not to be.
+ *
+ * What comes back is the type that was checked, rebuilt, and not the provider's
+ * value: the header is what the browser decides by, and it parses more than the
+ * part before the first `;`. A comma separates a list of types, and the last
+ * one wins — so `text/plain;a=b, text/html` is HTML to a browser. No type a
+ * book is stored with has a reason to hold a comma, so one is refused rather
+ * than parsed the way a browser would.
+ */
+function inlineContentType(contentType: string): string | null {
+  if (contentType.includes(",")) return null;
+
+  const [essence, ...parameters] = contentType
+    .split(";")
+    .map((part) => part.trim());
+  const type = essence.toLowerCase();
+  if (!INLINE_CONTENT_TYPES.has(type)) return null;
+
+  // Plain text is drawn in whatever encoding the header names, so a valid one
+  // is worth keeping. Nothing else is carried over.
+  if (type === "text/plain") {
+    for (const parameter of parameters) {
+      const charset = parameter.match(CHARSET);
+      if (charset) return `${type}; charset=${charset[1] ?? charset[2]}`;
+    }
+  }
+
+  return type;
 }
 
 /** RFC 6266 `filename` + `filename*`, so non-ASCII titles survive the trip. */
@@ -152,8 +180,8 @@ async function serve(
   const headers = new Headers({
     "accept-ranges": "bytes",
     etag: object.etag,
-    // The type below is the provider's, and a browser that sniffs past it can
-    // arrive at a different answer to the one this route stated.
+    // The type below is the provider's, or rebuilt from it, and a browser that
+    // sniffs past it can arrive at a different answer to the one stated.
     "x-content-type-options": "nosniff",
   });
 
@@ -173,12 +201,20 @@ async function serve(
     return new Response(null, { status: 416, headers });
   }
 
-  const contentType = object.contentType ?? "application/octet-stream";
-  headers.set("content-type", contentType);
+  const stored = object.contentType ?? "application/octet-stream";
+  const rendered = inline ? inlineContentType(stored) : null;
+  headers.set("content-type", rendered ?? stored);
   headers.set(
     "content-disposition",
-    contentDisposition(target.file, inline && mayInline(contentType)),
+    contentDisposition(target.file, rendered !== null),
   );
+  // Nothing served here needs to run anything, so it may not — whatever a
+  // browser makes of its type. Except a PDF shown inline: Chrome refuses to
+  // draw one in a sandboxed document, and the viewer that draws it runs in the
+  // browser's own origin rather than this one.
+  if (rendered !== "application/pdf") {
+    headers.set("content-security-policy", "sandbox");
+  }
 
   // What the provider says it served, not what was asked for.
   if (found.range) {
