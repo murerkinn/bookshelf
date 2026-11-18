@@ -80,11 +80,35 @@ export function decodeEntities(text: string): string {
   );
 }
 
+/**
+ * Text with its markup taken out: what `text.replace(/<[^>]+>/g, "")` does,
+ * without its cost. That pattern goes looking for a `>` from every `<`, and
+ * where there is none it reads to the end each time, so a field of nothing
+ * but `<` takes time in the square of its length. Once one `<` has no `>`
+ * after it none of the later ones do either, and that is where this stops.
+ */
+export function stripTags(text: string): string {
+  let out = "";
+  let kept = 0;
+  let open = text.indexOf("<");
+  while (open !== -1) {
+    // `<>` is not a tag: the pattern needs something between the two.
+    if (text[open + 1] === ">") {
+      open = text.indexOf("<", open + 1);
+      continue;
+    }
+    const close = text.indexOf(">", open + 1);
+    if (close === -1) break;
+    out += text.slice(kept, open);
+    kept = close + 1;
+    open = text.indexOf("<", kept);
+  }
+  return out + text.slice(kept);
+}
+
 /** Markup stripped, entities decoded, whitespace collapsed. */
 function clean(text: string): string {
-  return decodeEntities(text.replace(/<[^>]+>/g, ""))
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeEntities(stripTags(text)).replace(/\s+/g, " ").trim();
 }
 
 /** A regular-expression-safe form of a tag or attribute name. */
@@ -93,18 +117,33 @@ function quote(name: string): string {
 }
 
 /**
+ * Every element whose name matches `name`, a pattern rather than a literal:
+ * its attributes as the first group and its contents as the second.
+ *
+ * Neither half may run past the start of another tag of the same name. The
+ * obvious pattern, `[^>]*` for the attributes and `[\s\S]*?` for the
+ * contents, searches from each opening tag to the end of the document when
+ * nothing closes it, and a few kilobytes of `<dc:title>` repeated then take
+ * seconds to read. Stopping at the next one makes each search end where the
+ * next begins. Of an element nested in another of the same name, which
+ * neither OPF nor XMP has a use for, only the innermost is found.
+ */
+export function elements(name: string): RegExp {
+  return new RegExp(
+    `<${name}\\b([^<>]*)>([^<]*(?:<(?!/?${name}\\b)[^<]*)*)</${name}>`,
+    "gi",
+  );
+}
+
+/**
  * Every value of an element, by local name, whatever namespace prefix it
  * carries. Most EPUBs write `<dc:title>`, a few use a default namespace, and
  * the prefix is not worth caring about either way.
  */
 export function elementValues(xml: string, localName: string): string[] {
-  const name = quote(localName);
-  const pattern = new RegExp(
-    `<(?:[\\w.-]+:)?${name}\\b[^>]*>([\\s\\S]*?)</(?:[\\w.-]+:)?${name}>`,
-    "gi",
-  );
-  return [...xml.matchAll(pattern)]
-    .map((match) => clean(match[1]))
+  const name = `(?:[\\w.-]+:)?${quote(localName)}`;
+  return [...xml.matchAll(elements(name))]
+    .map((match) => clean(match[2]))
     .filter(Boolean);
 }
 
@@ -124,16 +163,15 @@ export function xmpValues(xmp: string, qualifiedName: string): string[] {
   const name = quote(qualifiedName);
   const values: string[] = [];
 
-  const elements = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`, "gi");
-  for (const match of xmp.matchAll(elements)) {
-    const inner = match[1];
-    const items = [...inner.matchAll(/<rdf:li\b[^>]*>([\s\S]*?)<\/rdf:li>/gi)];
+  for (const match of xmp.matchAll(elements(name))) {
+    const inner = match[2];
+    const items = [...inner.matchAll(elements("rdf:li"))];
     if (items.length > 0) {
       // An `rdf:Alt` is a set of translations of one value, so only the first
       // is wanted; a `Seq` or `Bag` is a list, and all of it is.
       const alternative = /<rdf:Alt\b/i.test(inner);
       for (const item of alternative ? items.slice(0, 1) : items) {
-        values.push(clean(item[1]));
+        values.push(clean(item[2]));
       }
     } else {
       values.push(clean(inner));
@@ -155,10 +193,15 @@ export function xmpValues(xmp: string, qualifiedName: string): string[] {
  * writing tool felt like. Semicolons and conjunctions are safe to split on; a
  * comma is not, because "Richardson, Leonard" is one person written backwards
  * and splitting it would invent a second.
+ *
+ * A separator is looked for only where a run of whitespace starts. Searched
+ * for from every point inside the run as well, it reads the rest of the run
+ * again each time, and a field of spaces takes time in the square of its
+ * length to split; the run's start finds whatever a later point would.
  */
 export function splitAuthors(value: string): string[] {
   return value
-    .split(/\s*;\s*|\s+(?:&|and)\s+/i)
+    .split(/(?:(?<!\s)\s+)?;\s*|(?<!\s)\s+(?:&|and)\s+/i)
     .map((name) => name.trim())
     .filter(Boolean);
 }
@@ -290,11 +333,12 @@ export function findIsbn(values: readonly string[]): string | undefined {
  * Splits a keyword field into subjects.
  *
  * One field, and every tool picks its own separator. Commas are safe here in a
- * way they are not for authors, because a keyword is not a name.
+ * way they are not for authors, because a keyword is not a name. Separators are
+ * looked for from the start of a whitespace run, as in {@link splitAuthors}.
  */
 export function splitSubjects(value: string): string[] {
   return value
-    .split(/\s*[;,]\s*|\n+/)
+    .split(/(?:(?<!\s)\s+)?[;,]\s*|\n+/)
     .map((subject) => subject.trim())
     .filter(Boolean);
 }

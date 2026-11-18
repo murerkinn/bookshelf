@@ -302,6 +302,59 @@ test("a cover the manifest promises but the archive lacks is no cover", async ()
   assert.equal(cover, null);
 });
 
+test("reads a package document of unclosed tags in linear time", async () => {
+  /**
+   * An EPUB whose package document is exactly `opf`, with none of the closing
+   * markup `book` wraps it in: the patterns these defeat only go quadratic
+   * when nothing after the tags closes them.
+   */
+  async function bare(opf, rootfiles = '<rootfile full-path="c.opf"/>') {
+    const directory = await mkdtemp(path.join(tmpdir(), "bookshelf-epub-"));
+    const file = path.join(directory, "book.epub");
+    await writeFile(
+      file,
+      writeZip([
+        {
+          name: "META-INF/container.xml",
+          content: `<container><rootfiles>${rootfiles}`,
+        },
+        { name: "c.opf", content: opf },
+      ]),
+    );
+    return file;
+  }
+
+  // Each of these is a few kilobytes compressed, and each took seconds to read
+  // when the patterns searched to the end of the document from every tag.
+  const files = [
+    await bare("<dc:title>".repeat(80_000)),
+    await bare('<meta property="belongs-to-collection">'.repeat(30_000)),
+    await bare(`<meta ${'name="cover" '.repeat(30_000)}`),
+    await bare("<item".repeat(50_000)),
+    await bare("<meta".repeat(40_000)),
+  ];
+
+  for (const file of files) {
+    const started = performance.now();
+    const { metadata, cover } = await readEpub(file);
+    const elapsed = performance.now() - started;
+
+    assert.equal(metadata.title, undefined);
+    assert.equal(metadata.series, undefined);
+    assert.equal(cover, null);
+    assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
+  }
+
+  // The container is the book's to write as well.
+  const started = performance.now();
+  await assert.rejects(
+    readEpub(await bare("", "<rootfile".repeat(40_000))),
+    /no rootfile/,
+  );
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
+});
+
 test("says what is wrong with something that is not a readable book", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "bookshelf-epub-"));
 
