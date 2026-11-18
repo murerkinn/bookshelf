@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { GET as book } from "../src/app/book/[...path]/route.ts";
 import { GET as cover } from "../src/app/cover/[...key]/route.ts";
 import { GET as download } from "../src/app/download/[...key]/route.ts";
+import { visitorKey } from "../src/lib/rate-limit.ts";
 import { checkRateLimit } from "../src/services/adapters/workers-rate-limit.ts";
 import { createServices, setServices } from "../src/services/container.ts";
-import { NoLimits } from "../src/services/ports/limits.ts";
+import { NoLimits, type RateLimits } from "../src/services/ports/limits.ts";
 import {
   type MemoryLibrary,
   memoryStorage,
@@ -260,4 +261,101 @@ test("a limiter is asked about one visitor at a time", async () => {
     asked.map((one) => one.visitor),
     [VISITOR, VISITOR, "198.51.100.9"],
   );
+});
+
+/**
+ * Limiters that count each visitor separately, as the Workers binding does.
+ *
+ * `recordingLimits` keeps one count for everybody, which is enough to show who
+ * was asked about but cannot show two visitors being told apart — and whether
+ * two addresses are one visitor is exactly what the tests below are about.
+ */
+function perVisitorLimits(allowance: number): RateLimits {
+  const counter = () => {
+    const used = new Map<string, number>();
+    return async (visitor: string): Promise<boolean> => {
+      const count = (used.get(visitor) ?? 0) + 1;
+      used.set(visitor, count);
+      return count <= allowance;
+    };
+  };
+  return { allowsR2: counter(), allowsDownload: counter() };
+}
+
+function keyOf(address: string): string {
+  return visitorKey(new Request("https://shelf.test/", from(address)));
+}
+
+test("an IPv6 visitor is counted by its /64, not by the address", async () => {
+  const memory = library();
+  setServices(createServices(memory.storage, nullCache(), perVisitorLimits(1)));
+
+  const statuses: number[] = [];
+  for (const address of [
+    "2001:db8:1:2::1",
+    "2001:db8:1:2::2",
+    "2001:db8:1:2:ffff:ffff:ffff:fffe",
+    "2001:db8:1:2::1",
+  ]) {
+    statuses.push((await ask(download, BOOK, from(address))).status);
+  }
+
+  // One host is routinely given a whole /64. Were each address its own
+  // visitor, that host could take a fresh allowance on every request.
+  assert.deepEqual(statuses, [200, 429, 429, 429]);
+  assert.equal(memory.reads.length, 1);
+
+  // The next /64 over is somebody else.
+  const neighbour = await ask(download, BOOK, from("2001:db8:1:3::1"));
+  assert.equal(neighbour.status, 200);
+});
+
+test("an IPv4 visitor is counted by the whole address", async () => {
+  const memory = library();
+  setServices(createServices(memory.storage, nullCache(), perVisitorLimits(1)));
+
+  const mine = await ask(download, BOOK, from("203.0.113.7"));
+  const next = await ask(download, BOOK, from("203.0.113.8"));
+
+  assert.equal(mine.status, 200);
+  assert.equal(next.status, 200);
+});
+
+test("every spelling of an IPv6 address is the same visitor", () => {
+  const key = "2001:db8:1:2::/64";
+  for (const spelling of [
+    "2001:db8:1:2::1",
+    "2001:0db8:0001:0002:0000:0000:0000:0001",
+    "2001:DB8:1:2:0:0:0:1",
+    "2001:db8:1:2::a:b",
+    "2001:db8:1:2::1.2.3.4",
+    "2001:db8:1:2::1%eth0",
+    " 2001:db8:1:2::1 ",
+  ]) {
+    assert.equal(keyOf(spelling), key, spelling);
+  }
+
+  // The `::` can stand in for groups inside the prefix as well.
+  assert.equal(keyOf("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(keyOf("::1"), "0:0:0:0::/64");
+});
+
+test("an IPv4 client on an IPv6 socket is keyed as the IPv4 address", () => {
+  // Otherwise every such client would share the one /64, ::ffff:0:0.
+  assert.equal(keyOf("::ffff:203.0.113.7"), "203.0.113.7");
+  assert.equal(keyOf("::FFFF:cb00:7107"), "203.0.113.7");
+  assert.equal(keyOf("0:0:0:0:0:ffff:203.0.113.7"), "203.0.113.7");
+  assert.equal(keyOf("203.0.113.7"), "203.0.113.7");
+});
+
+test("an address that does not parse is keyed as it came", () => {
+  // Cloudflare never sends one. If it did, a key per string is no worse than
+  // what the limiter did before it knew about prefixes.
+  for (const odd of [
+    "2001:db8::1::2",
+    "2001:db8:1:2:3:4:5:6:7",
+    "::ffff:1.2.3",
+  ]) {
+    assert.equal(keyOf(odd), odd);
+  }
 });
