@@ -155,3 +155,10 @@ production.
 The catalog is held in an in-isolate memo backed by the Workers Cache API for 60
 seconds. Covers carry `max-age=86400` with an ETag. OPDS feeds carry
 `public, max-age=60`, a weak ETag, and `Vary: Accept`.
+
+Chapters served from `/book` carry `max-age=3600`. On Workers, `/book` and
+`/cover` responses are also kept in the Cache API, keyed by the URL without its
+query string plus the catalog's `generatedAt`. Book keys are title slugs that a
+later book can reuse, and sync can't reach the cache, so each publish moving
+every entry onto a new key is what keeps a removed or replaced book from being
+served out of it.

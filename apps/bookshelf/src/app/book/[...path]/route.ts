@@ -2,14 +2,19 @@ import { parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
 import { entryContentType } from "@/lib/media";
 import { enforceR2RateLimit } from "@/lib/rate-limit";
+import { responseCacheKey } from "@/lib/response-cache";
 import { getServices } from "@/services/container";
 import { optional } from "@/services/errors";
 
 /**
- * A book's contents are fixed for a given key, and the reader re-requests
- * chapters as the user moves around, so these are worth caching hard.
+ * An hour. The reader re-requests chapters as the user moves around, so these
+ * are worth caching for a sitting — but not for a week: a book's key is its
+ * title slug, and republishing, removing or replacing it changes what is
+ * behind the key without changing the URL. The response cache here moves on
+ * with the catalog (see `responseCacheKey`); a browser, or a proxy in front of
+ * the Node server, has only this to go on.
  */
-const MAX_AGE_SECONDS = 604800;
+const MAX_AGE_SECONDS = 3600;
 
 /**
  * Splits `/book/<book file key>/<entry path>` into its two halves. Both contain
@@ -50,10 +55,10 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const { content, cache, limits } = await getServices();
+  const { catalog, content, cache, limits } = await getServices();
 
-  const cacheKey = request.url;
-  const hit = await optional(() => cache.match(cacheKey));
+  const cacheKey = await responseCacheKey(request, catalog);
+  const hit = cacheKey ? await optional(() => cache.match(cacheKey)) : null;
   if (hit) return hit;
 
   // After the cache for the same reason as the covers: a reader moving through
@@ -87,6 +92,8 @@ export async function GET(
     },
   });
 
-  void optional(async () => cache.put(cacheKey, response.clone()));
+  if (cacheKey) {
+    void optional(async () => cache.put(cacheKey, response.clone()));
+  }
   return response;
 }

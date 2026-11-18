@@ -78,7 +78,10 @@ run it from a subdirectory.
 
 Add a book to `books/` and run `npm run sync` again. Delete one and run it
 again, and it disappears from your shelf too — a normal run removes anything the
-previous catalog listed that the new one doesn't.
+previous catalog listed that the new one doesn't. The shelf notices within a
+couple of minutes, and stops serving the book's files then too. A browser that
+already fetched them may keep a chapter for up to an hour and a cover for a
+day.
 
 Use `--force` when your destination has drifted out of step with what you expect
 — for instance after an upload failed halfway. It clears first instead of

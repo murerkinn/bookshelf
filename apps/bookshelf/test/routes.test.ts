@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { CATALOG_FILE } from "@bookshelf/core";
+import { writeZip } from "@bookshelf/fixtures";
+import { GET as book } from "../src/app/book/[...path]/route.ts";
 import { GET as cover } from "../src/app/cover/[...key]/route.ts";
 import { GET as download } from "../src/app/download/[...key]/route.ts";
 import { serviceUnavailable } from "../src/lib/http.ts";
+import { resetCatalogMemo } from "../src/services/catalog.ts";
 import { createServices, setServices } from "../src/services/container.ts";
 import { LibraryUnavailableError } from "../src/services/errors.ts";
-import { type MemoryLibrary, memoryStorage, nullCache } from "./lib/storage.ts";
+import {
+  type MemoryLibrary,
+  memoryStorage,
+  must,
+  nullCache,
+  recordingCache,
+} from "./lib/storage.ts";
 
 /**
  * The two routes that read storage directly.
@@ -260,6 +270,120 @@ test("a cover that cannot be reached is not cached as a book with no cover", asy
 test("only images are served as covers", async () => {
   library();
   assert.equal((await ask(cover, BOOK)).status, 404);
+});
+
+/**
+ * A library sync publishes to, behind a cache that remembers — the Worker's
+ * composition, where the byte routes answer from the cache before storage.
+ *
+ * Its own book rather than Dracula, because the ZIP directory memo in
+ * `content.ts` is module-level and keyed by the book.
+ */
+const SHELVED = "revenant/revenant.epub";
+const SHELVED_COVER = "revenant/cover.webp";
+const CHAPTER = `${SHELVED}/OEBPS/ch1.xhtml`;
+
+function edition(chapter: string): Uint8Array {
+  return writeZip([
+    { name: "mimetype", content: "application/epub+zip" },
+    { name: "META-INF/container.xml", content: "<container/>" },
+    { name: "OEBPS/ch1.xhtml", content: chapter },
+  ]);
+}
+
+function catalog(generatedAt: string): string {
+  return JSON.stringify({ version: 1, generatedAt, books: [] });
+}
+
+function published() {
+  resetCatalogMemo();
+  const memory = memoryStorage({
+    [CATALOG_FILE]: catalog("2026-01-01T00:00:00.000Z"),
+    [SHELVED]: edition("<p>the first edition</p>"),
+    [SHELVED_COVER]: new Uint8Array([0x52, 0x49, 0x46, 0x46]),
+  });
+  const recording = recordingCache();
+  setServices(createServices(memory.storage, recording.cache));
+
+  return {
+    memory,
+    recording,
+    /** A sync run, and then the minute it takes the catalog to be re-read. */
+    publish(generatedAt: string) {
+      memory.put(CATALOG_FILE, catalog(generatedAt));
+      resetCatalogMemo();
+      recording.expire("https://bookshelf.internal/catalog/");
+    },
+  };
+}
+
+/** A GET at `/book`, whose segments are called `path` rather than `key`. */
+function chapter(query = ""): Promise<Response> {
+  return book(new Request(`https://shelf.test/book/${CHAPTER}${query}`), {
+    params: Promise.resolve({ path: CHAPTER.split("/") }),
+  });
+}
+
+test("a removed book is not served from the cache once the catalog moves on", async () => {
+  const { memory, recording, publish } = published();
+
+  assert.equal(await (await chapter()).text(), "<p>the first edition</p>");
+  assert.equal((await ask(cover, SHELVED_COVER)).status, 200);
+  // Both are held now, and a second request is answered from the cache.
+  await chapter();
+  assert.ok(recording.calls.some((call) => call.op === "match" && call.hit));
+
+  const remove = must(memory.storage.remove, "a writable library");
+  await remove(SHELVED);
+  await remove(SHELVED_COVER);
+  publish("2026-02-01T00:00:00.000Z");
+
+  // The URLs are unchanged — a book's key is its title slug — but what was
+  // cached under them was cached under the old catalog, and storage has
+  // nothing for them now.
+  assert.equal((await chapter()).status, 404);
+  assert.equal((await ask(cover, SHELVED_COVER)).status, 404);
+});
+
+test("a book replaced under the same key is served as it is now", async () => {
+  const { memory, publish } = published();
+  assert.equal(await (await chapter()).text(), "<p>the first edition</p>");
+
+  // Another book with the same title takes the same slug, and so the same URLs.
+  memory.put(
+    SHELVED,
+    edition("<p>another book that happened to share its title</p>"),
+  );
+  publish("2026-02-01T00:00:00.000Z");
+
+  assert.equal(
+    await (await chapter()).text(),
+    "<p>another book that happened to share its title</p>",
+  );
+});
+
+test("a query string does not make a chapter a different entry", async () => {
+  const { memory, recording } = published();
+  await chapter();
+  const read = memory.reads.length;
+
+  const again = await chapter("?v=1");
+  assert.equal(again.status, 200);
+  // Answered from the entry the plain URL left, so storage was not asked again
+  // and nothing new was stored.
+  assert.equal(memory.reads.length, read);
+  assert.equal(
+    recording.calls.filter(
+      (call) => call.op === "put" && call.key.startsWith("https://shelf.test/"),
+    ).length,
+    1,
+  );
+});
+
+test("a chapter is cached for a sitting, not a week", async () => {
+  published();
+  const response = await chapter();
+  assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
 });
 
 test("a bug is not dressed up as an outage", () => {

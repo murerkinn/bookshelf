@@ -212,6 +212,8 @@ export function brokenCache(): ResponseCache {
 export function recordingCache(): {
   calls: { op: string; key: string; hit?: boolean }[];
   size: () => number;
+  /** Drops every entry under a prefix, as their max-age running out does. */
+  expire: (prefix: string) => void;
   cache: ResponseCache;
 } {
   const held = new Map<string, Response>();
@@ -220,6 +222,11 @@ export function recordingCache(): {
   return {
     calls,
     size: () => held.size,
+    expire(prefix) {
+      for (const key of [...held.keys()]) {
+        if (key.startsWith(prefix)) held.delete(key);
+      }
+    },
     cache: {
       async match(key) {
         calls.push({ op: "match", key, hit: held.has(key) });
