@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { forwardedOrigin } from "@/lib/forwarded";
 
 /**
  * Where this request arrived, which is a different question from what the
@@ -7,20 +8,9 @@ import { headers } from "next/headers";
  * constants, and anything may import it.
  */
 
-/** Localhost in any of its spellings, which is the one host served over http. */
-function isLocal(host: string): boolean {
-  const name = host.split(":")[0];
-  return name === "localhost" || name === "127.0.0.1" || name === "[::1]";
-}
-
-/** A header a proxy may have written as a list; the first entry is ours. */
-function first(value: string | null): string | undefined {
-  return value?.split(",")[0]?.trim() || undefined;
-}
-
 /**
  * The origin this instance is reached at, for the absolute URLs that link
- * previews and canonical tags require.
+ * previews, canonical tags and OPDS feeds require.
  *
  * Read from the request rather than configured, so a self-hosted shelf
  * describes itself correctly wherever it is served from — the same reasoning
@@ -29,7 +19,10 @@ function first(value: string | null): string | undefined {
  *
  * BOOKSHELF_SITE_URL wins where the public address is not the one the app is
  * reached at: behind a proxy that does not say so, or where previews should
- * name a canonical host rather than whichever alias was used.
+ * name a canonical host rather than whichever alias was used. It is also the
+ * only answer a client cannot influence — the request's own is built from
+ * headers anyone can send, which `forwardedOrigin` narrows to a scheme and a
+ * host but cannot vouch for.
  */
 export async function siteOrigin(): Promise<URL> {
   const configured = process.env.BOOKSHELF_SITE_URL?.trim();
@@ -42,13 +35,5 @@ export async function siteOrigin(): Promise<URL> {
     }
   }
 
-  const list = await headers();
-  const host =
-    first(list.get("x-forwarded-host")) ??
-    first(list.get("host")) ??
-    "localhost:3000";
-
-  return new URL(
-    `${first(list.get("x-forwarded-proto")) ?? (isLocal(host) ? "http" : "https")}://${host}`,
-  );
+  return forwardedOrigin(await headers());
 }

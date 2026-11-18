@@ -102,11 +102,17 @@ function listable(books: Book[]): Book[] {
 /**
  * A weak validator over what the answer depends on.
  *
- * The body is a pure function of the catalog, the URL and the format, so there
- * is no need to hash it — which matters, because hashing it would mean building
- * every page of a large library just to answer a conditional request. A
- * KOReader that refreshes a feed it already holds gets a 304 for the cost of
- * a walk over forty characters.
+ * The body is a pure function of the catalog, the URL, the format and the
+ * origin its links are written against, so there is no need to hash it — which
+ * matters, because hashing it would mean building every page of a large
+ * library just to answer a conditional request. A KOReader that refreshes a
+ * feed it already holds gets a 304 for the cost of a walk over a few dozen
+ * characters.
+ *
+ * The origin is in there because, unless BOOKSHELF_SITE_URL names it, it comes
+ * from the request's headers. Without it, a feed whose links point somewhere
+ * else would share a validator with the real one, and a client holding the
+ * wrong one would be told it was current.
  */
 function etag(shelf: Shelf, request: OpdsRequest, format: OpdsFormat): string {
   const signature = [
@@ -115,6 +121,7 @@ function etag(shelf: Shelf, request: OpdsRequest, format: OpdsFormat): string {
     request.path.join("/"),
     request.query.toString(),
     format,
+    request.origin.href,
   ].join("\n");
 
   let hash = 0x811c9dc5;
@@ -418,12 +425,19 @@ export function serveOpds(published: Shelf, request: OpdsRequest): Response {
   const shelf: Shelf = { ...published, books: listable(published.books) };
 
   const headers = new Headers({
-    "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
-    // Which version this is was negotiated from `Accept`, and the response is
-    // publicly cacheable — so without this a shared cache that stored the Atom
-    // one would go on handing it to clients asking for JSON, and the other way
-    // round. The URL is the same for both; the request header is the whole of
-    // what tells them apart.
+    // Private, because every link in a feed is absolute and written against an
+    // origin read from the request's Host and X-Forwarded-* headers whenever
+    // BOOKSHELF_SITE_URL is unset. A shared cache that stored one client's feed
+    // would hand its links to everyone after. Varying on those headers instead
+    // would protect only a cache that honours `Vary` in full, which
+    // Cloudflare's does not, and the shelf ships no shared cache for `public`
+    // to have been saving anything in. The client's own cache and the
+    // validator are what keep a poll cheap.
+    "cache-control": `private, max-age=${MAX_AGE_SECONDS}`,
+    // Which version this is was negotiated from `Accept`, so without this a
+    // cache that stored the Atom one would go on handing it to a request for
+    // JSON, and the other way round. The URL is the same for both; the request
+    // header is the whole of what tells them apart.
     vary: "accept",
   });
 

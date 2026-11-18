@@ -117,7 +117,7 @@ today.
 | `BOOKSHELF_READ_ONLY` | set to `1` and storage keeps serving but stops accepting. Profiles can't be added, renamed or deleted, and reading positions stay in the browser. Set this on anything strangers can reach |
 | `BOOKSHELF_PROVIDER` | override the provider the build was made with |
 | `BOOKSHELF_DIRECTORY` | override where the filesystem provider looks |
-| `BOOKSHELF_SITE_URL` | the public address, for link previews and canonical URLs. Set it behind a proxy that doesn't say so |
+| `BOOKSHELF_SITE_URL` | the public address, for link previews, canonical URLs and the links in OPDS feeds. Without it they're built from the request's `Host` and `X-Forwarded-Host`/`-Proto` headers, which any client can send. Set it whenever the shelf is behind a reverse proxy |
 
 Everything else lives in `bookshelf.config.json` — see
 [publishing](docs/publishing.md#configure-where-things-go).

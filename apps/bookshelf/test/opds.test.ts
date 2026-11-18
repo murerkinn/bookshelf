@@ -82,12 +82,18 @@ function get(
     query = "",
     accept,
     ifNoneMatch,
-  }: { query?: string; accept?: string; ifNoneMatch?: string } = {},
+    origin = ORIGIN,
+  }: {
+    query?: string;
+    accept?: string;
+    ifNoneMatch?: string;
+    origin?: URL;
+  } = {},
 ): Response {
   return serveOpds(shelf, {
     path,
     query: new URLSearchParams(query),
-    origin: ORIGIN,
+    origin,
     accept,
     ifNoneMatch,
   });
@@ -650,13 +656,32 @@ test("the OpenSearch document is validated too", async () => {
 test("a feed is good for the minute the catalog memo is", async () => {
   assert.equal(
     get(SHELF, []).headers.get("cache-control"),
-    "public, max-age=60",
+    "private, max-age=60",
   );
 });
 
-test("a cacheable feed says what it was negotiated on", async () => {
-  // The URL is the same for both versions and the response is public, so a
-  // shared cache needs telling that `Accept` is what separates them.
+test("a feed written for one origin is never another's", async () => {
+  // The origin comes from headers a client can send, so a feed linking
+  // somewhere else must not be stored where others would be handed it, nor
+  // share a validator with the real one.
+  const elsewhere = new URL("https://attacker.example");
+  const forged = get(SHELF, ["books"], { origin: elsewhere });
+  assert.match(forged.headers.get("cache-control") ?? "", /^private\b/);
+
+  const etag = get(SHELF, ["books"]).headers.get("etag");
+  assert.notEqual(forged.headers.get("etag"), etag);
+
+  // A client holding the forged feed is sent the real one, not a 304.
+  const real = get(SHELF, ["books"], {
+    ifNoneMatch: forged.headers.get("etag") ?? "",
+  });
+  assert.equal(real.status, 200);
+  assert.doesNotMatch(await real.text(), /attacker\.example/);
+});
+
+test("a cached feed says what it was negotiated on", async () => {
+  // The URL is the same for both versions, so even a client's own cache needs
+  // telling that `Accept` is what separates them.
   for (const response of [
     get(SHELF, []),
     get(SHELF, [], { accept: OPDS_JSON }),

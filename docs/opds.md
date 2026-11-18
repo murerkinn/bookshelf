@@ -104,5 +104,10 @@ reflects your catalog, so an unpublished library gives an empty feed.
 entirely, so if you can see it on the web shelf but not in your reader, check
 that it published with a file.
 
+**Download links point at the wrong address.** Every link in a feed is
+absolute, built from the address the request arrived at. Behind a reverse
+proxy, set `BOOKSHELF_SITE_URL` to the public address so the links never
+depend on what the proxy forwards.
+
 **Feeds seem stale.** A feed is cached for a minute. Wait it out, or pull to
 refresh if your client offers it.
