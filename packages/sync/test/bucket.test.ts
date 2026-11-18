@@ -245,6 +245,60 @@ test("a failed upload is counted and named, and the rest still publish", async (
   assert.ok(log.some((line) => /cover upload exploded/.test(line)));
 });
 
+test("the catalog is published only once every book has been", async () => {
+  // A book that sorts after the catalog, so the order of the tree alone would
+  // not put the catalog last.
+  const output = await tree({
+    ...LIBRARY,
+    "zebra/metadata.json": "{}",
+    "zebra/zebra.epub": "epub bytes",
+  });
+  const { admin } = fakeAdmin();
+  admin.concurrency = 4;
+
+  const events = [];
+  const put = admin.put;
+  admin.put = async (key, file, contentType) => {
+    events.push(`start ${key}`);
+    // Slow enough that the pool is still busy when the catalog's turn comes.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await put(key, file, contentType);
+    events.push(`end ${key}`);
+  };
+
+  const result = await run(admin, output);
+  assert.equal(result.uploaded, 6);
+
+  // The shelf keys its cache on the catalog's date, so a catalog that landed
+  // while a book was still uploading would let that book's old bytes be cached
+  // under the new one.
+  const catalogStarts = events.indexOf("start catalog.json");
+  const lastBookEnds = Math.max(
+    ...events
+      .map((event, at) => [event, at])
+      .filter(
+        ([event]) => event.startsWith("end ") && event !== "end catalog.json",
+      )
+      .map(([, at]) => at),
+  );
+  assert.ok(catalogStarts > lastBookEnds, events.join("\n"));
+});
+
+test("the catalog is still published when a book failed to upload", async () => {
+  const output = await tree(LIBRARY);
+  const { admin, put } = fakeAdmin();
+  const upload = admin.put;
+  admin.put = async (key, file, contentType) => {
+    if (key === "a-book/a-book.epub") throw new Error("book upload exploded");
+    return upload(key, file, contentType);
+  };
+
+  const result = await run(admin, output);
+
+  assert.equal(result.failed, 1);
+  assert.equal(put.at(-1)?.key, "catalog.json");
+});
+
 test("a failed delete is a warning, not the end of the run", async () => {
   const output = await tree(LIBRARY);
   const { admin } = fakeAdmin({
