@@ -266,3 +266,34 @@ test("a file that cannot be read is not reported as absent", async () => {
   assert.equal(await storage.readBytes("nowhere.epub"), null);
   assert.equal(await storage.head("nowhere.epub"), null);
 });
+
+test("writes to the same key at once never tear it", async () => {
+  // Two visitors saving at the same moment. They used to share a temporary
+  // file, so one could truncate it while the other renamed it into place — and
+  // what landed parsed as nothing, which for the profile list is every profile.
+  const { directory, storage } = await library();
+  const key = ".bookshelf/progress/reader.json";
+  const long = JSON.stringify({ books: { a: "x".repeat(4000) } });
+  const short = JSON.stringify({ books: { b: "y" } });
+  const encode = (value) => new TextEncoder().encode(value);
+
+  for (let trial = 0; trial < 50; trial++) {
+    const results = await Promise.allSettled([
+      storage.write(key, encode(long)),
+      storage.write(key, encode(short)),
+    ]);
+
+    // Both land, one after the other, and the file is one of them whole.
+    assert.deepEqual(
+      results.map((result) => result.status),
+      ["fulfilled", "fulfilled"],
+    );
+    const landed = await readFile(path.join(directory, key), "utf8");
+    assert.ok(landed === long || landed === short, `torn: ${landed.length}`);
+  }
+
+  // And nothing is left beside it.
+  assert.deepEqual(await readdir(path.join(directory, ".bookshelf/progress")), [
+    "reader.json",
+  ]);
+});

@@ -7,7 +7,7 @@ import {
   type WritableStorage,
   writableStorage,
 } from "@bookshelf/core";
-import { reading } from "@/services/errors";
+import { LibraryUnavailableError, reading } from "@/services/errors";
 
 export type { BookProgress } from "@bookshelf/core";
 
@@ -42,7 +42,14 @@ export class ProgressService {
     return writableStorage(this.storage) !== null;
   }
 
-  /** The file as it stands, which a caller about to rewrite it must have. */
+  /**
+   * The file as it stands, which a caller about to rewrite it must have.
+   *
+   * A file that is there but is not a set of positions is refused as though it
+   * could not be read, not answered as none: {@link save} would otherwise
+   * rewrite it holding only the book just saved, and every other position in
+   * it — which might have been recoverable by hand — would be gone for good.
+   */
   private async stored(
     profileId: string,
   ): Promise<Record<string, BookProgress>> {
@@ -53,9 +60,13 @@ export class ProgressService {
 
     try {
       const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Progress;
-      return parsed.books ?? {};
-    } catch {
-      return {};
+      const books = parsed?.books;
+      if (typeof books !== "object" || books === null || Array.isArray(books)) {
+        throw new Error("the file holds no positions");
+      }
+      return books;
+    } catch (cause) {
+      throw new LibraryUnavailableError("reading a reading position", cause);
     }
   }
 

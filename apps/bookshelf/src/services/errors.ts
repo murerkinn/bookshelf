@@ -33,8 +33,10 @@ export function isUnavailable(
  *
  * Deliberately only around the call to the provider, never around the parsing
  * of what it returned: a file that cannot be read and a file whose contents are
- * nonsense are different problems with different answers, and the services
- * already answer the second one.
+ * nonsense are different problems, and the services answer the second one
+ * themselves. Mostly with a different answer — but the app's own state files
+ * are rewritten whole from what was read, so for those nonsense is refused
+ * exactly as an outage is.
  */
 export async function reading<T>(
   what: string,

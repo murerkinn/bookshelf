@@ -74,11 +74,13 @@ Every service tells three states apart.
 
 **Present** and **absent** are both ordinary. An unpublished catalog is an empty
 shelf, a library with no profile file has one implicit profile, a book nobody
-opened has no saved position, a corrupt file reads as absent. None of these
+opened has no saved position, a corrupt catalog reads as absent. None of these
 fails a page.
 
 **Unreachable** is storage that exists and is failing. It arrives as
-`LibraryUnavailableError`, and each caller answers for itself:
+`LibraryUnavailableError`, and each caller answers for itself. A profile list or
+progress file that doesn't parse counts as unreachable too, because the app
+rewrites those whole from what it read:
 
 | | when the library cannot be read |
 | --- | --- |

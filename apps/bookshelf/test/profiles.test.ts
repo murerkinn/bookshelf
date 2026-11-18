@@ -152,14 +152,24 @@ test("removing a profile nobody has changes nothing", async () => {
   assert.equal((await profiles.list()).length, 2);
 });
 
-test("a corrupt profile file does not take the shelf down with it", async () => {
-  const library = memoryStorage({ [PROFILES_FILE]: "{ not json" });
-  const profiles = new ProfileService(library.storage);
+test("a corrupt profile file is refused, never rewritten", async () => {
+  // What a torn write leaves: the start of one version run into the end of
+  // another. Read as empty, it put everyone on the implicit default — and the
+  // next profile created rewrote the file holding only it and that default.
+  const torn = `${profilesFile([profile("ada"), profile("guest")])[PROFILES_FILE]}uest","name":"guest"}]}`;
+  for (const contents of [torn, "{ not json", "null", '{"version":1}']) {
+    const library = memoryStorage({ [PROFILES_FILE]: contents });
+    const profiles = new ProfileService(library.storage);
 
-  // The library still reads, and the implicit default takes over.
-  const list = await profiles.list();
-  assert.equal(list.length, 1);
-  assert.equal(list[0].id, DEFAULT_PROFILE_ID);
+    await assert.rejects(profiles.list(), LibraryUnavailableError);
+    await assert.rejects(profiles.resolve("ada"), LibraryUnavailableError);
+    await assert.rejects(profiles.create("Newcomer"), LibraryUnavailableError);
+    await assert.rejects(profiles.remove("guest"), LibraryUnavailableError);
+
+    // Left as it was, for someone to look at.
+    assert.deepEqual(library.writes, []);
+    assert.equal(library.contents()[PROFILES_FILE], contents);
+  }
 });
 
 test("entries that could not be file names are dropped, not trusted", async () => {

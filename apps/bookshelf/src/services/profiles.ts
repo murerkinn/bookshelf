@@ -9,7 +9,12 @@ import {
   type Storage,
   writableStorage,
 } from "@bookshelf/core";
-import { optional, reading, writing } from "@/services/errors";
+import {
+  LibraryUnavailableError,
+  optional,
+  reading,
+  writing,
+} from "@/services/errors";
 
 export type { Profile } from "@bookshelf/core";
 
@@ -213,6 +218,11 @@ export class ProfileService {
    * would write one person's position into a file belonging to nobody, and the
    * position it displaced would be gone. Failing to render the shelf is
    * recoverable; quietly writing into the wrong file is not.
+   *
+   * A file that is there but is not a profile list is refused the same way,
+   * and for a second reason as well as that one: the next change rewrites the
+   * file from what was read, so reading it as empty would have the next profile
+   * created replace every profile there was.
    */
   private async stored(): Promise<Stored> {
     const bytes = await reading("the profile list", () =>
@@ -220,26 +230,29 @@ export class ProfileService {
     );
     if (!bytes) return { profiles: [], retired: [] };
 
+    let parsed: Profiles;
     try {
-      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Profiles;
-      return {
-        profiles: (parsed.profiles ?? []).filter(
-          (profile) =>
-            typeof profile?.id === "string" &&
-            isProfileId(profile.id) &&
-            typeof profile.name === "string",
-        ),
-        retired: Array.isArray(parsed.retired)
-          ? parsed.retired.filter(
-              (id) => typeof id === "string" && isProfileId(id),
-            )
-          : [],
-      };
-    } catch {
-      // A corrupt profile file should not take the shelf down with it: the
-      // library still reads, and the implicit default takes over.
-      return { profiles: [], retired: [] };
+      parsed = JSON.parse(new TextDecoder().decode(bytes)) as Profiles;
+      if (!Array.isArray(parsed?.profiles)) {
+        throw new Error("the file holds no list of profiles");
+      }
+    } catch (cause) {
+      throw new LibraryUnavailableError("reading the profile list", cause);
     }
+
+    return {
+      profiles: parsed.profiles.filter(
+        (profile) =>
+          typeof profile?.id === "string" &&
+          isProfileId(profile.id) &&
+          typeof profile.name === "string",
+      ),
+      retired: Array.isArray(parsed.retired)
+        ? parsed.retired.filter(
+            (id) => typeof id === "string" && isProfileId(id),
+          )
+        : [],
+    };
   }
 
   private async save(profiles: Profile[], retired: string[]): Promise<void> {
