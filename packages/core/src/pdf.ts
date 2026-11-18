@@ -582,13 +582,29 @@ export class PdfReader {
           throw new Error("malformed xref subsection");
         }
 
+        // The count is only a claim, and a file of fifty bytes can claim a
+        // quadrillion entries. The shortest entry is ` 0 0 n`, so a count the
+        // bytes left could not hold is either a window too small to see the
+        // whole table or a lie — and counting a lie out would take years.
+        if (count > (lexer.bytes.length - lexer.pos) / 6) {
+          if (!lexer.complete) throw new Truncated();
+          throw new Error("malformed xref subsection");
+        }
+
         for (let i = 0; i < count; i++) {
           skipSpace(lexer);
           const position = Number.parseInt(readToken(lexer), 10);
           skipSpace(lexer);
-          readToken(lexer); // generation
+          const generation = Number.parseInt(readToken(lexer), 10);
           skipSpace(lexer);
           const type = readToken(lexer);
+
+          // At a delimiter or the end of the bytes a token is empty and the
+          // lexer stands still, so an entry that is not two numbers is where
+          // the table stops making sense — not something to go round on.
+          if (!Number.isInteger(position) || !Number.isInteger(generation)) {
+            throw new Error("malformed xref entry");
+          }
 
           const num = start + i;
           if (type === "n" && !entries.has(num)) {
