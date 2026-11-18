@@ -64,6 +64,44 @@ function field(value: unknown): string | undefined {
     : undefined;
 }
 
+/** A header a proxy may have written as a list; the first entry is ours. */
+function first(value: string | null): string | undefined {
+  return value?.split(",")[0]?.trim() || undefined;
+}
+
+/**
+ * Whether a browser sent this on behalf of some other site's page.
+ *
+ * Without the check, any page a visitor opens can post here — a form or a
+ * no-cors fetch needs no permission — and so reach a shelf on their network
+ * that the page's author cannot. The visitor's cookie does not travel with it,
+ * so what it writes lands on the first profile, but it is a write all the same.
+ *
+ * `Sec-Fetch-Site` is the browser's own word on it and cannot be set by a
+ * page. Older browsers send only `Origin`, which is compared with the host the
+ * request arrived at, by name rather than scheme because a proxy that
+ * terminates TLS changes the one and not the other. A request with neither did
+ * not come from a browser, and anything that is not a browser could post here
+ * directly anyway.
+ */
+function crossSite(request: Request): boolean {
+  const site = request.headers.get("sec-fetch-site");
+  if (site) return site !== "same-origin";
+
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+
+  const host =
+    first(request.headers.get("x-forwarded-host")) ??
+    first(request.headers.get("host"));
+  try {
+    return new URL(origin).host !== host?.toLowerCase();
+  } catch {
+    // `null`, from a sandboxed frame or a redirect, is no origin of ours.
+    return true;
+  }
+}
+
 /** A page, counting from one — so zero is not one, and neither is a fraction. */
 function pageNumber(value: unknown): number | undefined {
   return typeof value === "number" &&
@@ -79,13 +117,19 @@ function pageNumber(value: unknown): number | undefined {
  *
  * A route handler rather than a server action because the reader also sends
  * this from `pagehide`, where only `sendBeacon` is reliable, and a beacon can
- * only post to a URL.
+ * only post to a URL. A route handler gets none of the Origin check Next gives
+ * a server action, so it does its own: a beacon from the reader is same-origin
+ * like any other request it makes, and arrives saying so.
  *
  * The answer says whether it was stored. A client told `saved: false` stops
  * asking and keeps its position in the browser, which is what happens against
  * a library the app cannot write to.
  */
 export async function POST(request: Request) {
+  if (crossSite(request)) {
+    return Response.json({ error: "cross-site" }, { status: 403 });
+  }
+
   let payload: unknown;
   try {
     const text = await readBody(request, MAX_BODY_BYTES);

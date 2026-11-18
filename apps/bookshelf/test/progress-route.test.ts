@@ -138,3 +138,57 @@ test("a body that turns out too long is refused before it is all read", async ()
   assert.ok(sent < 64 * 1024, `read ${sent} bytes of ${bytes.byteLength}`);
   assert.deepEqual(memory.writes, []);
 });
+
+/** What a browser adds to a post, as the page that made it would have it. */
+function from(origin: string, site?: string): Record<string, string> {
+  return {
+    host: "shelf.test",
+    origin,
+    ...(site ? { "sec-fetch-site": site } : {}),
+  };
+}
+
+test("another site's page cannot post a position", async () => {
+  const memory = library();
+
+  // A form or a no-cors fetch: no preflight, so nothing but the route stands
+  // between that page and a shelf on the visitor's network.
+  const response = await post(JSON.stringify({ bookId: "dracula", page: 7 }), {
+    "content-type": "text/plain",
+    ...from("https://elsewhere.test", "cross-site"),
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(memory.writes, []);
+});
+
+test("nor can a sibling site, or an older browser on another site", async () => {
+  const memory = library();
+  const body = JSON.stringify({ bookId: "dracula", page: 7 });
+
+  for (const headers of [
+    from("https://other.shelf.test", "same-site"),
+    from("https://elsewhere.test"),
+    from("null"),
+  ]) {
+    assert.equal((await post(body, headers)).status, 403, headers.origin);
+  }
+  assert.deepEqual(memory.writes, []);
+});
+
+test("the reader's own posts and beacons still arrive", async () => {
+  const memory = library();
+  const body = JSON.stringify({ bookId: "dracula", page: 7 });
+
+  for (const headers of [
+    // What a browser sends with the reader's fetch and its pagehide beacon.
+    from(SHELF, "same-origin"),
+    // A browser too old to say, judged by its origin instead.
+    from(SHELF),
+    // The same behind a proxy that says which host it was asked for.
+    { ...from("https://books.example"), "x-forwarded-host": "books.example" },
+  ]) {
+    assert.equal((await post(body, headers)).status, 200, headers.origin);
+  }
+  assert.equal(memory.writes.length, 3);
+});
