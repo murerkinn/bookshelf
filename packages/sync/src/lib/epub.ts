@@ -4,10 +4,12 @@ import { bytesSource, readZipDirectory, readZipEntry } from "@bookshelf/core";
 import {
   type BookMetadata,
   decodeEntities,
+  elements,
   elementValues,
   findIsbn,
   type ReadBook,
   splitSubjects,
+  stripTags,
   unique,
 } from "./metadata.js";
 
@@ -44,6 +46,15 @@ function attribute(tag: string, name: string): string | undefined {
 }
 
 /**
+ * Every `<meta>` opening tag. A tag stops at the next `<` as well as at its
+ * `>`: allowed to run on, the search goes from each `<meta` to the end of the
+ * document when nothing closes it, which is quadratic in a file of them.
+ */
+function metaTags(opf: string): string[] {
+  return [...opf.matchAll(/<meta\b[^<>]*>/gi)].map((match) => match[0]);
+}
+
+/**
  * The series a book belongs to, and where in it.
  *
  * Two conventions, both in the wild: Calibre has written `calibre:series` into
@@ -52,7 +63,7 @@ function attribute(tag: string, name: string): string | undefined {
  * required, and a book from a series usually says so in only one of them.
  */
 function findSeries(opf: string): { series?: string; seriesIndex?: number } {
-  const metas = [...opf.matchAll(/<meta\b[^>]*>/gi)].map((match) => match[0]);
+  const metas = metaTags(opf);
 
   const calibre = (name: string) =>
     metas.find(
@@ -71,15 +82,16 @@ function findSeries(opf: string): { series?: string; seriesIndex?: number } {
   }
 
   // The EPUB 3 form identifies itself by a `property` attribute rather than by
-  // its tag, so it is matched on that.
+  // its tag, so it is matched on that. It is looked for in each element's
+  // attributes rather than in the pattern that finds the element: there, a
+  // tag holding nothing but copies of it takes quadratic time to rule out.
   const property = (name: string): string | undefined => {
-    const pattern = new RegExp(
-      `<meta\\b[^>]*\\bproperty\\s*=\\s*"${name}"[^>]*>([\\s\\S]*?)</meta>`,
-      "i",
-    );
-    const found = opf.match(pattern)?.[1];
+    const named = new RegExp(`\\bproperty\\s*=\\s*"${name}"`, "i");
+    const found = [...opf.matchAll(elements("meta"))].find((match) =>
+      named.test(match[1]),
+    )?.[2];
     return found
-      ? decodeEntities(found.replace(/<[^>]+>/g, "")).trim() || undefined
+      ? decodeEntities(stripTags(found)).trim() || undefined
       : undefined;
   };
 
@@ -137,7 +149,7 @@ type ManifestItem = {
 type ImageItem = ManifestItem & { href: string; mediaType: string };
 
 function findCover(opf: string): ImageItem | undefined {
-  const images = [...opf.matchAll(/<item\b[^>]*>/gi)]
+  const images = [...opf.matchAll(/<item\b[^<>]*>/gi)]
     .map(
       (match): ManifestItem => ({
         id: attribute(match[0], "id"),
@@ -156,8 +168,8 @@ function findCover(opf: string): ImageItem | undefined {
   );
   if (byProperty) return byProperty;
 
-  const metaId = opf
-    .match(/<meta\b[^>]*\bname\s*=\s*"cover"[^>]*>/i)?.[0]
+  const metaId = metaTags(opf)
+    .find((meta) => /\bname\s*=\s*"cover"/i.test(meta))
     ?.match(/\bcontent\s*=\s*"([^"]*)"/i)?.[1];
   const byMeta = metaId && images.find((item) => item.id === metaId);
   if (byMeta) return byMeta;
@@ -181,7 +193,7 @@ export async function readEpub(file: string): Promise<ReadBook> {
 
   const container = decode(await readZipEntry(source, containerEntry));
   const opfPath = container.match(
-    /<rootfile\b[^>]*\bfull-path\s*=\s*"([^"]*)"/i,
+    /<rootfile\b[^<>]*\bfull-path\s*=\s*"([^"]*)"/i,
   )?.[1];
   if (!opfPath) throw new Error("no rootfile in container.xml");
 

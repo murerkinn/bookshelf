@@ -11,6 +11,7 @@ import {
   xmpPacket,
 } from "@bookshelf/fixtures";
 import {
+  elementValues,
   findIsbn,
   isJunkTitle,
   splitAuthors,
@@ -113,6 +114,41 @@ test("splits authors on separators that are not part of a name", () => {
     "cs.AI",
     "cs.SE",
   ]);
+});
+
+test("reads metadata made of unclosed tags and long runs in linear time", () => {
+  // Each of these took seconds while a pattern searched to the end of the
+  // text from every tag or every space, and takes milliseconds when it stops
+  // at the next one.
+  const cases = [
+    () => xmpValues("<dc:title>".repeat(60_000), "dc:title"),
+    () =>
+      xmpValues(
+        `<dc:creator><rdf:Seq>${"<rdf:li>".repeat(60_000)}</rdf:Seq></dc:creator>`,
+        "dc:creator",
+      ),
+    () => elementValues(`<dc:title>${"<".repeat(120_000)}</dc:title>`, "title"),
+    () => splitAuthors(`a${" ".repeat(60_000)}b`),
+    () => splitSubjects(`a${" ".repeat(100_000)}b`),
+  ];
+
+  for (const run of cases) {
+    const started = performance.now();
+    run();
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
+  }
+
+  // What the fast versions find is what the slow ones did.
+  assert.deepEqual(elementValues("<dc:title>a<<b</dc:title>", "title"), [
+    "a<<b",
+  ]);
+  assert.deepEqual(
+    elementValues("<dc:title>a <i>b</i><></dc:title>", "title"),
+    ["a b<>"],
+  );
+  assert.deepEqual(splitAuthors("A ;B  and  C;;D"), ["A", "B", "C", "D"]);
+  assert.deepEqual(splitSubjects("a ,b;\n\nc"), ["a", "b", "c"]);
 });
 
 test("readPdf maps a document onto the metadata a book carries", async () => {
