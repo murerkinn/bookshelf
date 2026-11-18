@@ -34,10 +34,10 @@
     "@bookshelf/core": "*",
     "@bookshelf/provider-fs": "*",
     "@bookshelf/provider-r2": "*",
-    "@opennextjs/cloudflare": "^1.20.2",
+    "@opennextjs/cloudflare": "^1.20.17",
     "epubjs": "^0.3.93",
     "lucide-react": "^1.33.0",
-    "next": "16.3.1",
+    "next": "16.4.6",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -48,9 +48,9 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@xmldom/xmldom": "^0.8.14",
+    "@xmldom/xmldom": "^0.8.15",
     "tailwindcss": "^4",
     "typescript": "^7.0.2",
-    "wrangler": "^4.123.0"
+    "wrangler": "^4.164.0"
   }
 }
