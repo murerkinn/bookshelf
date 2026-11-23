@@ -135,6 +135,24 @@ test("a corrupt progress file reads as no positions", async () => {
   assert.equal(await progress.get("murat", "a-book"), null);
 });
 
+test("a position is not saved over a corrupt progress file", async () => {
+  // What a torn write leaves: one version run into the end of another. Read
+  // as no positions, the next save rewrote it holding that one book alone.
+  const torn =
+    '{"version":1,"books":{"one":{"cfi":"a"},"two":{"cfi":"b"}}}{"cfi":"c"}}}';
+  for (const contents of [torn, "{ half a file", "null", '{"version":1}']) {
+    const library = memoryStorage({ [progressFile("ada")]: contents });
+    const progress = new ProgressService(library.storage);
+
+    assert.equal(await progress.save("ada", "three", { cfi: "c" }), false);
+    assert.equal(await progress.clear("ada", "one"), false);
+
+    // Left as it was, for someone to look at.
+    assert.deepEqual(library.writes, []);
+    assert.equal(library.contents()[progressFile("ada")], contents);
+  }
+});
+
 test("a library that cannot be written to says so instead of throwing", async () => {
   // The reader asks before it offers to sync, and a position that cannot be
   // stored is kept in the browser instead — so this has to be answerable, not

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createReadStream, type Stats } from "node:fs";
 import {
   copyFile,
@@ -205,9 +206,25 @@ class FsStorage implements WritableStorage {
     // Written beside the target and renamed, so a process that dies midway
     // leaves the previous version intact rather than a truncated one. These
     // are the only files the app owns, and losing them loses bookmarks.
-    const temporary = `${file}.${process.pid.toString(36)}.tmp`;
-    await writeFile(temporary, bytes);
-    await rename(temporary, file);
+    //
+    // A name of its own for every write, not one per process: two requests
+    // saving the same key at once used to share a temporary file, so one could
+    // truncate it while the other was renaming it into place, and a torn
+    // profile list is every profile gone. `wx` makes a name that is somehow
+    // taken an error, rather than a way into someone else's half-written file.
+    const unique = randomBytes(6).toString("hex");
+    const temporary = `${file}.${process.pid.toString(36)}-${unique}.tmp`;
+    try {
+      await writeFile(temporary, bytes, { flag: "wx" });
+      await rename(temporary, file);
+    } catch (error) {
+      // Named per write, so nothing would ever overwrite one left behind. Not
+      // when the name was taken, though: then the file is not this write's.
+      if ((error as { code?: string } | null)?.code !== "EEXIST") {
+        await rm(temporary, { force: true }).catch(() => {});
+      }
+      throw error;
+    }
   }
 
   async remove(key: string): Promise<void> {
