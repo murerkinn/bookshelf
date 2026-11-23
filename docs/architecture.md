@@ -137,7 +137,9 @@ apps/bookshelf/src/lib/opds/
 **Don't import `next/headers` under `lib/opds/`.** `serveOpds` takes the shelf
 and the origin as parameters, which is what keeps every feed reachable from
 `test/opds.test.ts`. That's also why `siteOrigin()` lives in `lib/origin.ts`
-rather than in `lib/site.ts`.
+rather than in `lib/site.ts`, and why what it believes of the request's
+`Host` and `X-Forwarded-*` headers is in `lib/forwarded.ts`, a pure function
+`test/origin.test.ts` can reach.
 
 ## Error pages
 
@@ -156,7 +158,10 @@ production.
 
 The catalog is held in an in-isolate memo backed by the Workers Cache API for 60
 seconds. Covers carry `max-age=86400` with an ETag. OPDS feeds carry
-`public, max-age=60`, a weak ETag, and `Vary: Accept`.
+`private, max-age=60`, a weak ETag that covers the origin, and `Vary: Accept`.
+They're private because their links are absolute, and unless
+`BOOKSHELF_SITE_URL` is set the origin comes from request headers a client can
+send — a shared cache must not hand one client's links to the next.
 
 Chapters served from `/book` carry `max-age=3600`. On Workers, `/book` and
 `/cover` responses are also kept in the Cache API, keyed by the URL without its
