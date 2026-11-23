@@ -3,7 +3,7 @@
  *
  * A module rather than a literal inside `next.config.ts` because two of the
  * decisions here are load-bearing and quietly reversible — the `base-uri` and
- * the two routes held out of the frame directives — and a config file is not
+ * the routes held out of the page policy — and a config file is not
  * somewhere a test can reach.
  */
 
@@ -100,7 +100,11 @@ export function securityHeaders() {
       // an empty box instead of a book. Neither loses anything by it: a chapter
       // is already served under `sandbox`, and what guards a download is its
       // disposition and its type, not this.
-      source: "/:path((?!book/|download/).*)",
+      //
+      // `/cover/` is held out for a different reason: it sends a stricter
+      // policy of its own, and Next drops a route's header when the config
+      // has already set one of the same name.
+      source: "/:path((?!book/|download/|cover/).*)",
       headers: [
         { key: "content-security-policy", value: contentSecurityPolicy() },
         { key: "x-frame-options", value: "DENY" },

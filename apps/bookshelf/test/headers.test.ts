@@ -80,6 +80,17 @@ test("a page refuses to be framed, and the two routes meant to be framed do not"
 });
 
 /**
+ * A cover sends a stricter policy than a page's, and Next sends a header from
+ * the config in place of one the route set. Covering it here would hand a
+ * cover opened on its own a policy that allows inline script.
+ */
+test("a cover keeps the policy its route gives it", () => {
+  const policy = policyFor("/cover/a-book/cover.webp");
+  assert.equal(policy.get("content-security-policy"), undefined);
+  assert.equal(policy.get("x-content-type-options"), "nosniff");
+});
+
+/**
  * epub.js renders a chapter by writing it into an iframe's `srcdoc`, which
  * inherits this policy, and it injects a `<base>` into every chapter so the
  * relative URLs inside resolve back to `/book/`. `base-uri 'none'` blocks that

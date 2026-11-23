@@ -1,6 +1,6 @@
 import { normaliseEtag, parseBookKey } from "@bookshelf/core";
 import { serviceUnavailable } from "@/lib/http";
-import { imageContentType, isImage } from "@/lib/media";
+import { coverContentType, isCover } from "@/lib/media";
 import { enforceR2RateLimit } from "@/lib/rate-limit";
 import { responseCacheKey } from "@/lib/response-cache";
 import { getServices } from "@/services/container";
@@ -15,6 +15,19 @@ import { optional, reading } from "@/services/errors";
  * catalog (see `responseCacheKey`).
  */
 const MAX_AGE_SECONDS = 86400;
+
+/**
+ * A cover is only ever drawn by an `<img>`, which ignores a policy on what it
+ * fetches. This is for the one other way to reach it: opened on its own, as a
+ * page of this origin. Then it may run nothing and load nothing. The inline
+ * style is the browser's own, which some lay out a lone image with.
+ *
+ * Sent by the route rather than left to `next.config`, which holds this path
+ * out of the page policy: Next sends a header from the config in place of the
+ * route's own, and that policy allows inline script.
+ */
+const CONTENT_SECURITY_POLICY =
+  "sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'";
 
 /**
  * Serves a cover image out of the private bucket. The key comes from the book's
@@ -46,7 +59,7 @@ async function serve(
   // was already here and is the narrower of the two for this route; the shape
   // check is what keeps every byte route agreeing about which keys a request
   // may name, rather than each being safe for its own separate reason.
-  if (!parseBookKey(objectKey) || !isImage(objectKey)) {
+  if (!parseBookKey(objectKey) || !isCover(objectKey)) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -89,12 +102,16 @@ async function serve(
   }
 
   const headers = new Headers({
-    "content-type": found.object.contentType ?? imageContentType(objectKey),
+    // From the key, never the type the provider stored. Sync stores the same
+    // answer, but the bucket is not necessarily only ever written by sync, and
+    // whoever wrote this object could have called it `text/html`.
+    "content-type": coverContentType(objectKey),
     "cache-control": `public, max-age=${MAX_AGE_SECONDS}`,
     etag: found.object.etag,
     // An image served as something a browser sniffs its way into rendering
     // differently is the one way a cover could be more than a cover.
     "x-content-type-options": "nosniff",
+    "content-security-policy": CONTENT_SECURITY_POLICY,
   });
 
   if (!found.body) {

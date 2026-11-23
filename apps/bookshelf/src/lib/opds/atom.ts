@@ -1,6 +1,6 @@
 import { type Book, bookKey, contentTypeFor } from "@bookshelf/core";
 import { encodeKey } from "@/lib/http";
-import { imageContentType } from "@/lib/media";
+import { coverContentType } from "@/lib/media";
 import {
   ACQUISITION,
   ATOM_ACQUISITION,
@@ -130,7 +130,7 @@ function bookLinks(book: Book, asset: (path: string) => string): string {
     // of these rather than one standing in for the other.
     ...(cover
       ? [IMAGE, THUMBNAIL].map((rel) =>
-          link({ rel, href: asset(cover), type: imageContentType(cover) }),
+          link({ rel, href: asset(cover), type: coverContentType(cover) }),
         )
       : []),
     // Not an acquisition: a client that would rather hand a book to a browser

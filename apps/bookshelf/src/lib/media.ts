@@ -1,16 +1,29 @@
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
+/**
+ * The types a cover is served as: raster images, and nothing else.
+ *
+ * SVG is the image format left out, on purpose. It is a document rather than a
+ * picture — it can carry script — and a cover URL opened on its own renders in
+ * this origin. Nothing sync publishes is lost by it: the thumbnailer writes
+ * WebP or JPEG, and a full-size `.svg` is stored as octet-stream, which no
+ * browser would draw as an image anyway.
+ */
+const COVER_CONTENT_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
   gif: "image/gif",
   webp: "image/webp",
   avif: "image/avif",
-  svg: "image/svg+xml",
 };
 
-/** Content types for the files found inside an EPUB. */
+/**
+ * Content types for the files found inside an EPUB. SVG is allowed here where
+ * it is not for a cover because `/book/` serves under a `sandbox` policy of its
+ * own, and a chapter's illustrations are often SVG.
+ */
 const ENTRY_CONTENT_TYPES: Record<string, string> = {
-  ...IMAGE_CONTENT_TYPES,
+  ...COVER_CONTENT_TYPES,
+  svg: "image/svg+xml",
   xhtml: "application/xhtml+xml; charset=utf-8",
   html: "text/html; charset=utf-8",
   htm: "text/html; charset=utf-8",
@@ -26,7 +39,7 @@ const ENTRY_CONTENT_TYPES: Record<string, string> = {
   otf: "font/otf",
 };
 
-export const IMAGE_EXTENSIONS = new Set(Object.keys(IMAGE_CONTENT_TYPES));
+const COVER_EXTENSIONS = new Set(Object.keys(COVER_CONTENT_TYPES));
 
 export function extension(path: string): string {
   const fileName = path.slice(path.lastIndexOf("/") + 1);
@@ -34,12 +47,14 @@ export function extension(path: string): string {
   return dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
 }
 
-export function isImage(path: string): boolean {
-  return IMAGE_EXTENSIONS.has(extension(path));
+export function isCover(path: string): boolean {
+  return COVER_EXTENSIONS.has(extension(path));
 }
 
-export function imageContentType(path: string): string {
-  return IMAGE_CONTENT_TYPES[extension(path)] ?? "application/octet-stream";
+export function coverContentType(path: string): string {
+  return isCover(path)
+    ? COVER_CONTENT_TYPES[extension(path)]
+    : "application/octet-stream";
 }
 
 export function entryContentType(path: string): string {
