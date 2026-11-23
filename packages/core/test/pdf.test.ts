@@ -123,6 +123,31 @@ test("survives a truncated file without throwing", async () => {
   }
 });
 
+test("does not believe a cross-reference count the file is too short to hold", async () => {
+  // Fifty-odd bytes claiming fifty million entries, with nothing after the
+  // claim to read them from. Counting the claim out takes seconds, and the
+  // sixteen-digit version of this file takes years; refusing it takes nothing.
+  const claim = "0 50000000\n";
+  const tail = "startxref\n9\n%%EOF\n";
+  const encode = (text) => new TextEncoder().encode(text);
+
+  // Short enough to be read in one window, and long enough to need the window
+  // grown first, which is the path where running out means "read more".
+  const short = encode(`%PDF-1.4\nxref\n${claim}${tail}`);
+  const long = encode(
+    `%PDF-1.4\nxref\n${claim}%${"x".repeat(100_000)}\n${tail}`,
+  );
+
+  for (const pdf of [short, long]) {
+    const started = performance.now();
+    const document = await read(pdf);
+    const elapsed = performance.now() - started;
+
+    assert.deepEqual(document.info, {});
+    assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
+  }
+});
+
 test("turns a PDF date into ISO 8601, at whatever precision it was given", () => {
   assert.equal(pdfDate("D:20200102030405+01'00'"), "2020-01-02T03:04:05+01:00");
   assert.equal(pdfDate("D:20200102030405Z"), "2020-01-02T03:04:05Z");
