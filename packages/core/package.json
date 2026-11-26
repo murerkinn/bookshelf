@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@bookshelf/fixtures": "*",
-    "@types/node": "^24",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2"
   }
 }
